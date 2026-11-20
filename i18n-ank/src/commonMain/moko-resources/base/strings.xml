@@ -308,4 +308,31 @@
     <string name="remote_download_failed">Download failed: %1$s</string>
     <string name="remote_download_cancelled">Cancelled %1$s</string>
     <string name="remote_download_channel_name">Remote file downloads</string>
+
+    <!-- CloudStream (.cs3) Extensions & Repositories -->
+    <string name="label_cloudstream_extensions">CloudStream extensions</string>
+    <string name="cloudstream_extensions_subtitle">Install &amp; manage .cs3 repositories and plugins</string>
+    <string name="cloudstream_tab_plugins">Extensions</string>
+    <string name="cloudstream_tab_repos">Repositories</string>
+    <string name="cloudstream_add_repo">Add repository</string>
+    <string name="cloudstream_add_repo_hint">Repository URL (repo.json, plugins.json, or shortcode)</string>
+    <string name="cloudstream_add_repo_message">Paste a CloudStream repository URL (including Arabic or community repositories). Supports repo.json, plugins.json, cloudstreamrepo://, and shortcodes.</string>
+    <string name="cloudstream_repos_empty">No CloudStream repositories added.\nTap + to paste a CloudStream repository URL.</string>
+    <string name="cloudstream_plugins_empty">No CloudStream extensions available.\nAdd a repository to browse and install .cs3 plugins.</string>
+    <string name="cloudstream_confirm_delete_repo">Remove repository \"%1$s\" and uninstall its .cs3 extensions?</string>
+    <string name="cloudstream_repo_added">Added repository: %1$s</string>
+    <string name="cloudstream_repo_removed">Removed repository: %1$s</string>
+    <string name="cloudstream_plugin_installed">Installed %1$s</string>
+    <string name="cloudstream_plugin_updated">Updated %1$s</string>
+    <string name="cloudstream_plugin_uninstalled">Uninstalled %1$s</string>
+    <string name="cloudstream_action_install">Install</string>
+    <string name="cloudstream_action_update">Update</string>
+    <string name="cloudstream_action_update_all">Update all</string>
+    <string name="cloudstream_action_uninstall">Uninstall</string>
+    <string name="cloudstream_action_refresh">Refresh</string>
+    <string name="cloudstream_search_hint">Search CloudStream extensions…</string>
+    <string name="cloudstream_filter_all">All</string>
+    <string name="cloudstream_filter_installed">Installed</string>
+    <string name="cloudstream_filter_updates">Updates</string>
+    <string name="cloudstream_badge_source">CloudStream</string>
 </resources>

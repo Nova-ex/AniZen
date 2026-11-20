@@ -40,9 +40,10 @@ fun extensionsTab(
     val actionFilter = stringResource(MR.strings.action_filter)
     // ANZ -->
     val labelExtensionRepos = stringResource(AMR.strings.label_extension_stores)
+    val labelCloudStream = stringResource(AMR.strings.label_cloudstream_extensions)
     // ANZ <--
 
-    return remember(updates, actionFilter, labelExtensionRepos) {
+    return remember(updates, actionFilter, labelExtensionRepos, labelCloudStream) {
         TabContent(
             titleRes = MR.strings.label_extensions,
             badgeNumber = updates.takeIf { it > 0 },
@@ -70,6 +71,12 @@ fun extensionsTab(
                     title = labelExtensionRepos,
                     onClick = { navigator.push(ExtensionReposScreen()) },
                 ),
+                // ANZ -->
+                AppBar.OverflowAction(
+                    title = labelCloudStream,
+                    onClick = { navigator.push(eu.kanade.tachiyomi.ui.cloudstream.CloudStreamManagerScreen) },
+                ),
+                // ANZ <--
             ),
             content = { contentPadding, _ ->
                 val state by extensionsScreenModel.state.collectAsStateWithLifecycle()

@@ -120,6 +120,18 @@ commons-net = "commons-net:commons-net:3.11.1"
 jsch = "com.github.mwiede:jsch:0.2.23"
 bcprov = "org.bouncycastle:bcprov-jdk18on:1.80"
 
+# CloudStream (.cs3) runtime
+nicehttp = "com.github.Blatzar:NiceHttp:0.4.16"
+jackson-databind = "com.fasterxml.jackson.core:jackson-databind:2.15.2"
+jackson-module-kotlin = "com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2"
+rhino = "org.mozilla:rhino:1.7.15"
+gson = "com.google.code.gson:gson:2.11.0"
+fuzzywuzzy = "me.xdrop:fuzzywuzzy:1.4.0"
+newpipe-extractor = "com.github.TeamNewPipe:NewPipeExtractor:v0.24.4"
+tmdb-java = "com.uwetrottmann.tmdb2:tmdb-java:2.10.0"
+retrofit-core = "com.squareup.retrofit2:retrofit:2.11.0"
+retrofit-jackson = "com.squareup.retrofit2:converter-jackson:2.11.0"
+
 [plugins]
 google-services = { id = "com.google.gms.google-services", version = "4.4.3" }
 aboutLibraries = { id = "com.mikepenz.aboutlibraries.plugin", version.ref = "aboutlib_version" }

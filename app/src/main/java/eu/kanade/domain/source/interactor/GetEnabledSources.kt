@@ -1,6 +1,7 @@
 package eu.kanade.domain.source.interactor
 
 import eu.kanade.domain.source.service.SourcePreferences
+import eu.kanade.tachiyomi.data.cloudstream.isCloudStreamSourceId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -29,7 +30,8 @@ class GetEnabledSources(
                 .filter {
                     it.lang in enabledLanguages ||
                         it.id == LocalAnimeSource.ID ||
-                        it.id.isRemoteServerSourceId()
+                        it.id.isRemoteServerSourceId() ||
+                        it.id.isCloudStreamSourceId()
                 }
                 // ANZ <--
                 .filterNot { it.id.toString() in disabledSources }

@@ -178,6 +178,7 @@ class AppModule(val app: Application) : InjektModule {
         addSingletonFactory { MpvConfig(app, get(), get(), get()) }
         addSingletonFactory { AudioManager(app) }
         addSingletonFactory { BrightnessManager(app) }
+        addSingletonFactory { eu.kanade.tachiyomi.data.cloudstream.CloudStreamManager(app) }
         // ANZ <--
     }
 }

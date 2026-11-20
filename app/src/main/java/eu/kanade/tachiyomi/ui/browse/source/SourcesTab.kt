@@ -45,9 +45,10 @@ fun Screen.sourcesTab(): TabContent {
     val actionFilter = stringResource(MR.strings.action_filter)
     // ANZ -->
     val remoteServers = stringResource(AMR.strings.label_remote_servers)
+    val cloudStreamExtensions = stringResource(AMR.strings.label_cloudstream_extensions)
     // ANZ <--
 
-    return remember(globalSearch, actionFilter, remoteServers) {
+    return remember(globalSearch, actionFilter, remoteServers, cloudStreamExtensions) {
         TabContent(
             titleRes = MR.strings.label_sources,
             searchEnabled = false,
@@ -69,6 +70,12 @@ fun Screen.sourcesTab(): TabContent {
                     icon = Icons.Outlined.FilterList,
                     onClick = { navigator.push(SourcesFilterScreen()) },
                 ),
+                // ANZ -->
+                AppBar.OverflowAction(
+                    title = cloudStreamExtensions,
+                    onClick = { navigator.push(eu.kanade.tachiyomi.ui.cloudstream.CloudStreamManagerScreen) },
+                ),
+                // ANZ <--
             ),
             content = { contentPadding, snackbarHostState ->
                 val state by screenModel.state.collectAsStateWithLifecycle()

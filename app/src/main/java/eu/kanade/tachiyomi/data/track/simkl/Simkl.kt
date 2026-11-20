@@ -84,9 +84,18 @@ class Simkl(id: Long) : BaseTracker(id, "Simkl"), AnimeTracker, ImportableTracke
     }
 
     override suspend fun searchAnime(query: String): List<TrackSearch> {
+        // ANZ -->
+        val normalized = eu.kanade.tachiyomi.data.track.TrackerTitleNormalizer.normalizeForAutoMatch(query)
+        val results = api.searchAnime(normalized, "anime") +
+            api.searchAnime(normalized, "tv") +
+            api.searchAnime(normalized, "movie")
+        if (results.isNotEmpty() || normalized == query) {
+            return results
+        }
         return api.searchAnime(query, "anime") +
             api.searchAnime(query, "tv") +
             api.searchAnime(query, "movie")
+        // ANZ <--
     }
 
     override suspend fun refresh(track: Track): Track {

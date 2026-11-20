@@ -118,6 +118,29 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
     @SuppressLint("LaunchActivityFromNotification")
     override fun onCreate() {
         registerActivityLifecycleCallbacks(eu.kanade.tachiyomi.network.interceptor.ActivityTracker)
+        // ANZ -->
+        registerActivityLifecycleCallbacks(
+            object : ActivityLifecycleCallbacks {
+                override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: android.os.Bundle?) {
+                    com.lagradost.cloudstream3.MainActivity.activity = activity
+                }
+                override fun onActivityStarted(activity: android.app.Activity) {
+                    com.lagradost.cloudstream3.MainActivity.activity = activity
+                }
+                override fun onActivityResumed(activity: android.app.Activity) {
+                    com.lagradost.cloudstream3.MainActivity.activity = activity
+                }
+                override fun onActivityPaused(activity: android.app.Activity) = Unit
+                override fun onActivityStopped(activity: android.app.Activity) = Unit
+                override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: android.os.Bundle) = Unit
+                override fun onActivityDestroyed(activity: android.app.Activity) {
+                    if (com.lagradost.cloudstream3.MainActivity.activity === activity) {
+                        com.lagradost.cloudstream3.MainActivity.activity = null
+                    }
+                }
+            },
+        )
+        // ANZ <--
 
         super<Application>.onCreate()
         patchInjekt()
@@ -164,6 +187,9 @@ class App : Application(), DefaultLifecycleObserver, SingletonImageLoader.Factor
             uiPreferences.migrateNavStyle()
             Injekt.get<NetworkHelper>()
             Injekt.get<eu.kanade.tachiyomi.extension.ExtensionManager>()
+            // ANZ -->
+            Injekt.get<eu.kanade.tachiyomi.data.cloudstream.CloudStreamManager>().loadInstalledPluginsOnStartup()
+            // ANZ <--
             Injekt.get<SourceManager>()
             Injekt.get<DownloadManager>()
             Injekt.get<eu.kanade.tachiyomi.data.download.DownloadCache>()

@@ -33,12 +33,16 @@ import androidx.core.graphics.drawable.toBitmap
 import coil3.compose.AsyncImage
 import eu.kanade.domain.source.model.icon
 import eu.kanade.tachiyomi.R
+import eu.kanade.tachiyomi.data.cloudstream.CloudStreamManager
+import eu.kanade.tachiyomi.data.cloudstream.isCloudStreamSourceId
 import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.extension.util.ExtensionLoader
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.domain.remoteserver.model.isRemoteServerSourceId
 import tachiyomi.domain.source.model.Source
 import tachiyomi.source.localanime.isLocal
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 
 private val defaultModifier = Modifier
     .height(40.dp)
@@ -75,6 +79,26 @@ fun SourceIcon(
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = modifier.then(defaultModifier),
             )
+        }
+        source.id.isCloudStreamSourceId() -> {
+            val iconUrl = remember(source.id) {
+                Injekt.get<CloudStreamManager>().getIconUrlForSource(source.id)
+            }
+            if (!iconUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = iconUrl,
+                    contentDescription = null,
+                    modifier = modifier
+                        .then(defaultModifier)
+                        .clip(MaterialTheme.shapes.extraSmall),
+                )
+            } else {
+                Image(
+                    painter = painterResource(R.mipmap.ic_default_source),
+                    contentDescription = null,
+                    modifier = modifier.then(defaultModifier),
+                )
+            }
         }
         source.isLocal() -> {
             Image(

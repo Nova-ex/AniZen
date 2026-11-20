@@ -2,6 +2,7 @@ package eu.kanade.tachiyomi.ui.browse.source
 
 import android.app.Application
 import eu.kanade.presentation.browse.SourceUiModel
+import eu.kanade.tachiyomi.data.cloudstream.isCloudStreamSourceId
 import eu.kanade.tachiyomi.data.remoteserver.RemoteAnimeSource
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.network.model.NodeStatus
@@ -39,14 +40,21 @@ class SourceUiModelMapper(
         } else {
             null
         }
-        val secondaryText = if (remoteSource != null) {
-            "${remoteSource.server.protocol.name} • ${remoteSource.server.host}:${remoteSource.server.port}"
-        } else {
-            buildString {
-                append(sourceLangString)
-                if (extensionName != null && extensionName != source.name) {
-                    append(" • ")
-                    append(extensionName)
+        val isCloudStream = source.id.isCloudStreamSourceId()
+        val secondaryText = when {
+            remoteSource != null -> {
+                "${remoteSource.server.protocol.name} • ${remoteSource.server.host}:${remoteSource.server.port}"
+            }
+            isCloudStream -> {
+                "$sourceLangString • CloudStream"
+            }
+            else -> {
+                buildString {
+                    append(sourceLangString)
+                    if (extensionName != null && extensionName != source.name) {
+                        append(" • ")
+                        append(extensionName)
+                    }
                 }
             }
         }

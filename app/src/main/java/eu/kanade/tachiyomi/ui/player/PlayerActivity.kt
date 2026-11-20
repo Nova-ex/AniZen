@@ -1427,19 +1427,47 @@ class PlayerActivity : BaseActivity() {
         if (viewModel.isEpisodeOnline() != true) return
         val source = viewModel.currentSource.value as? AnimeHttpSource
 
-        val rawHeaders = video.headers ?: source?.headers ?: return
-        val headers = rawHeaders
-            .toMultimap()
-            .mapValues { it.value.firstOrNull() ?: "" }
-            .toMutableMap()
+        // ANZ -->
+        val rawHeaders = video.headers ?: source?.headers
+        if (rawHeaders == null || rawHeaders.size == 0) {
+            mpv.setOptionString("referrer", "")
+            mpv.setOptionString("http-header-fields", "")
+            return
+        }
 
-        if (headers.isEmpty()) return
+        val headers = linkedMapOf<String, String>()
+        rawHeaders.toMultimap().forEach { (key, values) ->
+            val joined = if (key.equals("Cookie", ignoreCase = true)) {
+                values.filter { it.isNotBlank() }.joinToString("; ")
+            } else {
+                values.firstOrNull().orEmpty()
+            }
+            if (joined.isNotBlank()) {
+                headers[key] = joined
+            }
+        }
 
-        val httpHeaderString = headers.map {
-            it.key + ": " + it.value.replace(",", "\\,")
-        }.joinToString(",")
+        if (headers.isEmpty()) {
+            mpv.setOptionString("referrer", "")
+            mpv.setOptionString("http-header-fields", "")
+            return
+        }
 
+        val userAgentKey = headers.keys.firstOrNull { it.equals("User-Agent", ignoreCase = true) }
+        val userAgent = userAgentKey?.let { headers.remove(it) }
+        if (!userAgent.isNullOrBlank()) {
+            mpv.setOptionString("user-agent", userAgent)
+        }
+
+        val refererKey = headers.keys.firstOrNull { it.equals("Referer", ignoreCase = true) }
+        val referer = refererKey?.let { headers.remove(it) }
+        mpv.setOptionString("referrer", referer.orEmpty())
+
+        val httpHeaderString = headers.entries.joinToString(",") { (key, value) ->
+            "$key: ${value.replace(",", "\\,")}"
+        }
         mpv.setOptionString("http-header-fields", httpHeaderString)
+        // ANZ <--
 
         // need to fix the cache
         // MPVLib.setOptionString("cache-on-disk", "yes")

@@ -37,6 +37,11 @@ object SettingsBrowseScreen : SearchableSettings {
 
         val sourcePreferences = remember { Injekt.get<SourcePreferences>() }
         val getExtensionRepoCount = remember { Injekt.get<GetExtensionRepoCount>() }
+        // ANZ -->
+        val cloudStreamManager = remember { Injekt.get<eu.kanade.tachiyomi.data.cloudstream.CloudStreamManager>() }
+        val csRepos by cloudStreamManager.reposFlow.collectAsState()
+        val csPlugins by cloudStreamManager.installedPluginsFlow.collectAsState()
+        // ANZ <--
 
         val animeReposCount by getExtensionRepoCount.subscribe().collectAsState(0)
 
@@ -70,6 +75,19 @@ object SettingsBrowseScreen : SearchableSettings {
                             navigator.push(ExtensionReposScreen())
                         },
                     ),
+                    // ANZ -->
+                    Preference.PreferenceItem.TextPreference(
+                        title = stringResource(AMR.strings.label_cloudstream_extensions),
+                        subtitle = if (csRepos.isEmpty() && csPlugins.isEmpty()) {
+                            stringResource(AMR.strings.cloudstream_extensions_subtitle)
+                        } else {
+                            "${csRepos.size} repos • ${csPlugins.size} installed"
+                        },
+                        onClick = {
+                            navigator.push(eu.kanade.tachiyomi.ui.cloudstream.CloudStreamManagerScreen)
+                        },
+                    ),
+                    // ANZ <--
                 ),
             ),
             Preference.PreferenceGroup(

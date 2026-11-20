@@ -65,3 +65,6 @@ include(":presentation-widget")
 include(":source-api")
 include(":source-local")
 include(":telemetry")
+// ANZ -->
+include(":cloudstream-runtime")
+// ANZ <--

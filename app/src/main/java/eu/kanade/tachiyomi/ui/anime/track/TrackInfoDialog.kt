@@ -162,10 +162,14 @@ data class TrackInfoDialogHomeScreen(
                 if (it.tracker is EnhancedTracker) {
                     screenModel.registerEnhancedTracking(it)
                 } else {
+                    // ANZ -->
+                    val defaultQuery = it.track?.title
+                        ?: eu.kanade.tachiyomi.data.track.TrackerTitleNormalizer.normalizeForAutoMatch(animeTitle)
+                    // ANZ <--
                     navigator.push(
                         TrackServiceSearchScreen(
                             animeId = animeId,
-                            initialQuery = it.track?.title ?: animeTitle,
+                            initialQuery = defaultQuery,
                             currentUrl = it.track?.remoteUrl,
                             serviceId = it.tracker.id,
                         ),

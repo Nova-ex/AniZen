@@ -40,6 +40,14 @@
 -keep class uy.kohesive.injekt.** { public protected *; }
 # ANZ -->
 -keep class is.xyz.mpv.** { *; }
+-keep class com.lagradost.** { *; }
+-keep interface com.lagradost.** { *; }
+-keep enum com.lagradost.** { *; }
+-keep class com.fasterxml.jackson.** { *; }
+-keep class com.google.gson.** { *; }
+-keep class org.mozilla.javascript.** { *; }
+-keep class me.xdrop.fuzzywuzzy.** { *; }
+-keep class org.schabi.newpipe.** { *; }
 # ANZ <--
 -keep class com.arthenica.** { public protected *; }
 

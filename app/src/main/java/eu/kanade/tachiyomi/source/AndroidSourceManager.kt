@@ -52,6 +52,7 @@ class AndroidSourceManager(
     private val remoteMetadataResolver by lazy {
         RemoteMetadataResolver(context, networkHelper, json)
     }
+    private val cloudStreamManager: eu.kanade.tachiyomi.data.cloudstream.CloudStreamManager by injectLazy()
     // ANZ <--
 
     private val scope = CoroutineScope(Job() + Dispatchers.IO)
@@ -76,10 +77,18 @@ class AndroidSourceManager(
                 extensionManager.isInitialized,
                 // ANZ -->
                 getRemoteServers.subscribeAll(),
+                cloudStreamManager.sourcesFlow,
                 // ANZ <--
-            ) { extensions, isExtensionManagerInitialized, remoteServers ->
-                Triple(extensions, isExtensionManagerInitialized, remoteServers)
-            }.collectLatest { (extensions, isExtensionManagerInitialized, remoteServers) ->
+            ) { extensions, isExtensionManagerInitialized, remoteServers, cloudStreamSources ->
+                // ANZ -->
+                SourceInputs(
+                    extensions = extensions,
+                    isExtensionManagerInitialized = isExtensionManagerInitialized,
+                    remoteServers = remoteServers,
+                    cloudStreamSources = cloudStreamSources,
+                )
+                // ANZ <--
+            }.collectLatest { (extensions, isExtensionManagerInitialized, remoteServers, cloudStreamSources) ->
                 if (!isExtensionManagerInitialized) return@collectLatest
 
                 val previousMap = sourcesMapFlow.value
@@ -114,6 +123,10 @@ class AndroidSourceManager(
                     }
                     mutableMap[remoteSource.id] = remoteSource
                     registerStubSource(StubSource.from(remoteSource))
+                }
+                cloudStreamSources.forEach { csSource ->
+                    mutableMap[csSource.id] = csSource
+                    registerStubSource(StubSource.from(csSource))
                 }
                 // ANZ <--
                 sourcesMapFlow.value = mutableMap
@@ -206,4 +219,13 @@ class AndroidSourceManager(
         }
         return StubSource(id = id, lang = "", name = "")
     }
+
+    // ANZ -->
+    private data class SourceInputs(
+        val extensions: List<eu.kanade.tachiyomi.extension.model.Extension.Installed>,
+        val isExtensionManagerInitialized: Boolean,
+        val remoteServers: List<tachiyomi.domain.remoteserver.model.RemoteServer>,
+        val cloudStreamSources: List<eu.kanade.tachiyomi.data.cloudstream.CloudStreamAnimeSource>,
+    )
+    // ANZ <--
 }

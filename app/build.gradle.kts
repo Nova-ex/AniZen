@@ -51,7 +51,9 @@ android {
         applicationId = "app.anizen"
 
         versionCode = 725
-        versionName = "0.5.225"
+        // ANZ -->
+        versionName = "2.5v"
+        // ANZ <--
 
         manifestPlaceholders["author"] = "@salmanbappi"
 
@@ -71,7 +73,9 @@ android {
     buildTypes {
         val debug by getting {
             applicationIdSuffix = ".dev"
-            versionNameSuffix = "-${getCommitCount()}"
+            // ANZ -->
+            // Keep debug versionName clean so Android App Info displays "2.5v"
+            // ANZ <--
             isPseudoLocalesEnabled = true
         }
         val release by getting {
@@ -110,7 +114,9 @@ android {
 
             applicationIdSuffix = ".beta"
 
-            versionNameSuffix = debug.versionNameSuffix
+            // ANZ -->
+            versionNameSuffix = "-${getCommitCount()}"
+            // ANZ <--
             signingConfig = release.signingConfig
 
             matchingFallbacks.addAll(commonMatchingFallbacks)
@@ -122,7 +128,9 @@ android {
 
             isDebuggable = false
             isProfileable = true
-            versionNameSuffix = "${debug.versionNameSuffix}-benchmark"
+            // ANZ -->
+            versionNameSuffix = "-${getCommitCount()}-benchmark"
+            // ANZ <--
             applicationIdSuffix = ".benchmark"
 
             signingConfig = debug.signingConfig
@@ -217,11 +225,20 @@ android {
     }
 
     applicationVariants.all {
-        if (buildType.name == "preview") {
-            outputs.all {
-                val output = this as? com.android.build.gradle.api.ApkVariantOutput
+        outputs.all {
+            val output = this as? com.android.build.gradle.api.ApkVariantOutput
+            if (buildType.name == "preview") {
                 output?.versionNameOverride = "r-${getCommitCount()}"
             }
+            // ANZ -->
+            val baseOutput = this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            val abiFilter = output?.getFilter(com.android.build.VariantOutput.FilterType.ABI)
+            baseOutput?.outputFileName = if (abiFilter.isNullOrBlank()) {
+                "AniZen-2.5v.apk"
+            } else {
+                "AniZen-2.5v-$abiFilter.apk"
+            }
+            // ANZ <--
         }
     }
 }
@@ -423,6 +440,8 @@ dependencies {
     implementation(libs.commons.net)
     implementation(libs.jsch)
     implementation(libs.bcprov)
+    // CloudStream (.cs3) runtime
+    implementation(projects.cloudstreamRuntime)
     // ANZ <--
 }
 

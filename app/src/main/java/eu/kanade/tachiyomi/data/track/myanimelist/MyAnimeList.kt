@@ -150,7 +150,14 @@ class MyAnimeList(id: Long) :
             }
         }
 
+        // ANZ -->
+        val normalized = eu.kanade.tachiyomi.data.track.TrackerTitleNormalizer.normalizeForAutoMatch(query)
+        val results = api.searchAnime(normalized)
+        if (results.isNotEmpty() || normalized == query) {
+            return results
+        }
         return api.searchAnime(query)
+        // ANZ <--
     }
 
     override suspend fun refresh(track: Track): Track {
