@@ -16,7 +16,6 @@ import eu.kanade.tachiyomi.animesource.model.HttpServer
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.data.download.model.Download
-import eu.kanade.tachiyomi.data.remoteserver.RemoteAnimeSource
 import eu.kanade.tachiyomi.data.torrentServer.service.TorrentServerService
 import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -577,12 +576,7 @@ class Downloader(
             try {
                 // ANZ -->
                 if (video.usesHttpServer()) {
-                    val createdServer = when (val src = download.source) {
-                        is AnimeHttpSource -> src.createHttpServer()
-                        is RemoteAnimeSource -> src.createHttpServer()
-                        else -> null
-                    }
-                    val port = createdServer?.let { server ->
+                    val port = download.source.createHttpServer()?.let { server ->
                         downloadHttpServer = server
                         server.start()
                         server.listeningPort

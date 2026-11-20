@@ -146,7 +146,7 @@ object RemoteServersScreen : Screen {
                                 navigator.push(
                                     BrowseSourceScreen(
                                         server.toSourceId(),
-                                        BrowseSourceScreenModel.Listing.Popular.name,
+                                        BrowseSourceScreenModel.Listing.Popular.query,
                                     ),
                                 )
                             },

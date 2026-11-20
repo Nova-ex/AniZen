@@ -8,7 +8,6 @@ import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.animesource.online.ParsedAnimeHttpSource
 import eu.kanade.tachiyomi.data.download.DownloadManager
-import eu.kanade.tachiyomi.data.remoteserver.RemoteAnimeSource
 import eu.kanade.tachiyomi.ui.player.PlayerViewModel
 import eu.kanade.tachiyomi.ui.player.controls.components.sheets.HosterState
 import eu.kanade.tachiyomi.util.subtitles.StremioSubtitleResolver
@@ -50,7 +49,6 @@ class EpisodeLoader {
                 source is AnimeHttpSource -> getHostersOnHttp(episode, source)
                 source is LocalAnimeSource -> getHostersOnLocal(episode)
                 // ANZ -->
-                source is RemoteAnimeSource -> source.getHostersForEpisode(episode.toSEpisode())
                 else -> throw PlayerViewModel.ExceptionWithStringResource(
                     "Source not supported: ${source.name}",
                     MR.strings.source_unsupported,

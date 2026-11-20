@@ -1,7 +1,6 @@
 package eu.kanade.tachiyomi.data.remoteserver
 
 import android.content.Context
-import eu.kanade.tachiyomi.animesource.AnimeCatalogueSource
 import eu.kanade.tachiyomi.animesource.UnmeteredSource
 import eu.kanade.tachiyomi.animesource.model.AnimeFilterList
 import eu.kanade.tachiyomi.animesource.model.AnimesPage
@@ -11,9 +10,12 @@ import eu.kanade.tachiyomi.animesource.model.SAnime
 import eu.kanade.tachiyomi.animesource.model.SEpisode
 import eu.kanade.tachiyomi.animesource.model.Track
 import eu.kanade.tachiyomi.animesource.model.Video
+import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import logcat.LogPriority
+import okhttp3.Request
+import okhttp3.Response
 import tachiyomi.core.common.util.lang.withIOContext
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.remoteserver.model.RemoteServer
@@ -26,7 +28,7 @@ class RemoteAnimeSource(
     private val context: Context,
     private val metadataResolver: RemoteMetadataResolver,
     private val json: Json,
-) : AnimeCatalogueSource, UnmeteredSource {
+) : AnimeHttpSource(), UnmeteredSource {
 
     private val sourceToken = RemoteHttpServer.newToken()
 
@@ -36,7 +38,11 @@ class RemoteAnimeSource(
 
     override val lang: String = "other"
 
+    override val baseUrl: String = "http://localhost"
+
     override val supportsLatest: Boolean = true
+
+    override val supportsRelatedAnimes: Boolean = false
 
     @Volatile
     private var cachedRootFolders: List<RemoteFileItem> = emptyList()
@@ -85,7 +91,7 @@ class RemoteAnimeSource(
                     compareBy<RemoteFileItem> { it.modifiedAtMillis }
                         .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
                 } else {
-                    compareBy<RemoteFileItem>(String.CASE_INSENSITIVE_ORDER) {
+                    compareBy<RemoteFileItem, String>(String.CASE_INSENSITIVE_ORDER) {
                         RemoteEpisodeParser.cleanAnimeTitle(it.name)
                     }
                 }
@@ -233,9 +239,9 @@ class RemoteAnimeSource(
         return AnimeFilterList(listOf(RemoteOrderBy.Popular(context)))
     }
 
-    fun createHttpServer(): HttpServer = RemoteHttpServer(server, sourceToken)
+    override fun createHttpServer(): HttpServer = RemoteHttpServer(server, sourceToken)
 
-    suspend fun getHostersForEpisode(episode: SEpisode): List<Hoster> {
+    override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
         return withIOContext {
             val remoteFilePath = RemoteFileItem.normalizePath(episode.url)
             val parentDir = RemoteFileItem.parentPath(remoteFilePath)
@@ -280,6 +286,47 @@ class RemoteAnimeSource(
             )
         }
     }
+
+    override suspend fun getVideoList(hoster: Hoster): List<Video> = hoster.videoList ?: emptyList()
+
+    override suspend fun getVideoList(episode: SEpisode): List<Video> = getHosterList(episode).flatMap { it.videoList.orEmpty() }
+
+    override fun getAnimeUrl(anime: SAnime): String {
+        val proto = server.protocol.name.lowercase(Locale.ROOT)
+        return "$proto://${server.host}:${server.port}${RemoteFileItem.normalizePath(anime.url)}"
+    }
+
+    override fun getEpisodeUrl(episode: SEpisode): String {
+        val proto = server.protocol.name.lowercase(Locale.ROOT)
+        return "$proto://${server.host}:${server.port}${RemoteFileItem.normalizePath(episode.url)}"
+    }
+
+    override fun popularAnimeRequest(page: Int): Request = throw UnsupportedOperationException("Not used")
+
+    override fun popularAnimeParse(response: Response): AnimesPage = throw UnsupportedOperationException("Not used")
+
+    override fun searchAnimeRequest(page: Int, query: String, filters: AnimeFilterList): Request =
+        throw UnsupportedOperationException("Not used")
+
+    override fun searchAnimeParse(response: Response): AnimesPage = throw UnsupportedOperationException("Not used")
+
+    override fun latestUpdatesRequest(page: Int): Request = throw UnsupportedOperationException("Not used")
+
+    override fun latestUpdatesParse(response: Response): AnimesPage = throw UnsupportedOperationException("Not used")
+
+    override fun animeDetailsParse(response: Response): SAnime = throw UnsupportedOperationException("Not used")
+
+    override fun episodeListParse(response: Response): List<SEpisode> = throw UnsupportedOperationException("Not used")
+
+    override fun episodeVideoParse(response: Response): SEpisode = throw UnsupportedOperationException("Not used")
+
+    override fun hosterListParse(response: Response): List<Hoster> = throw UnsupportedOperationException("Not used")
+
+    override fun videoListParse(response: Response, hoster: Hoster): List<Video> = throw UnsupportedOperationException("Not used")
+
+    override fun videoListParse(response: Response): List<Video> = throw UnsupportedOperationException("Not used")
+
+    override fun videoUrlParse(response: Response): String = throw UnsupportedOperationException("Not used")
 
     private fun loadRootFolders(
         client: RemoteListingClient,

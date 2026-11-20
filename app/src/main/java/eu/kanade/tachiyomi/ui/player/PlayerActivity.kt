@@ -79,7 +79,6 @@ import eu.kanade.tachiyomi.data.connections.discord.DiscordRPCService
 import eu.kanade.tachiyomi.data.connections.discord.PlayerData
 import eu.kanade.tachiyomi.data.notification.NotificationReceiver
 import eu.kanade.tachiyomi.data.notification.Notifications
-import eu.kanade.tachiyomi.data.remoteserver.RemoteAnimeSource
 import eu.kanade.tachiyomi.data.remoteserver.RemoteHttpServer
 import eu.kanade.tachiyomi.data.torrentServer.service.TorrentServerService
 import eu.kanade.tachiyomi.source.isNsfw
@@ -1289,15 +1288,11 @@ class PlayerActivity : BaseActivity() {
             }
         } else {
             // ANZ -->
-            val createdServer = when (val src = viewModel.currentSource.value) {
-                is AnimeHttpSource -> src.createHttpServer()
-                is RemoteAnimeSource -> src.createHttpServer()
-                else -> null
-            }
+            val httpSource = viewModel.currentSource.value as? AnimeHttpSource
             var videoUrl: String = video.videoUrl
-            if (video.usesHttpServer() && createdServer != null) {
+            if (video.usesHttpServer() && httpSource != null) {
                 val port = try {
-                    httpServer = createdServer
+                    httpServer = httpSource.createHttpServer()
                     httpServer?.start()
                     httpServer?.listeningPort ?: 0
                 } catch (e: Exception) {
