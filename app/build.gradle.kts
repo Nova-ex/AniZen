@@ -64,7 +64,7 @@ android {
 
         versionCode = 726
         // ANZ -->
-        versionName = "2.5v"
+        versionName = "2.5v.1"
         // ANZ <--
 
         manifestPlaceholders["author"] = "@salmanbappi"
