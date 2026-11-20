@@ -24,7 +24,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Dns
-import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.MoreVert
@@ -32,8 +31,6 @@ import androidx.compose.material.icons.outlined.NetworkCheck
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -74,9 +71,11 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.presentation.components.AppBar
-import eu.kanade.tachiyomi.data.remoteserver.RemoteDownloadManager
+import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
+import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreenModel
 import tachiyomi.domain.remoteserver.model.RemoteProtocol
 import tachiyomi.domain.remoteserver.model.RemoteServer
+import tachiyomi.domain.remoteserver.model.toSourceId
 import tachiyomi.i18n.MR
 import tachiyomi.i18n.ank.AMR
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -103,32 +102,11 @@ object RemoteServersScreen : Screen {
             screenModel.clearSnackbar()
         }
 
-        val activeDownloadsCount = state.downloads.count {
-            it.status == RemoteDownloadManager.Status.Downloading ||
-                it.status == RemoteDownloadManager.Status.Queued
-        }
-
         Scaffold(
             topBar = { scrollBehavior ->
                 AppBar(
                     title = stringResource(AMR.strings.label_remote_servers),
                     navigateUp = navigator::pop,
-                    actions = {
-                        IconButton(onClick = screenModel::openDownloadsDialog) {
-                            BadgedBox(
-                                badge = {
-                                    if (activeDownloadsCount > 0) {
-                                        Badge { Text(activeDownloadsCount.toString()) }
-                                    }
-                                },
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Download,
-                                    contentDescription = stringResource(AMR.strings.remote_browser_downloads_title),
-                                )
-                            }
-                        }
-                    },
                     scrollBehavior = scrollBehavior,
                 )
             },
@@ -164,7 +142,14 @@ object RemoteServersScreen : Screen {
                     ) { server ->
                         RemoteServerCard(
                             server = server,
-                            onClick = { navigator.push(RemoteBrowserScreen(server.id)) },
+                            onClick = {
+                                navigator.push(
+                                    BrowseSourceScreen(
+                                        server.toSourceId(),
+                                        BrowseSourceScreenModel.Listing.Popular.name,
+                                    ),
+                                )
+                            },
                             onEdit = { screenModel.openEditDialog(server) },
                             onTest = { screenModel.testConnection(server, showSnackbar = true) },
                             onDelete = { screenModel.openDeleteDialog(server) },
@@ -202,16 +187,6 @@ object RemoteServersScreen : Screen {
                             Text(stringResource(MR.strings.action_cancel))
                         }
                     },
-                )
-            }
-            RemoteServersScreenModel.Dialog.Downloads -> {
-                RemoteDownloadsSheet(
-                    downloads = state.downloads,
-                    onPause = screenModel::pauseDownload,
-                    onRetry = screenModel::retryDownload,
-                    onCancel = screenModel::cancelDownload,
-                    onClearFinished = screenModel::clearFinishedDownloads,
-                    onDismiss = screenModel::dismissDialog,
                 )
             }
             null -> Unit

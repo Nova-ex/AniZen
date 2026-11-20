@@ -19,6 +19,7 @@ import tachiyomi.domain.episode.model.Episode
 import tachiyomi.domain.episode.model.toEpisodeUpdate
 import tachiyomi.domain.episode.repository.EpisodeRepository
 import tachiyomi.domain.episode.service.EpisodeRecognition
+import tachiyomi.domain.remoteserver.model.isRemoteServerSourceId
 import tachiyomi.source.localanime.isLocal
 import java.lang.Long.max
 import java.time.ZonedDateTime
@@ -49,7 +50,9 @@ class SyncEpisodesWithSource(
         manualFetch: Boolean = false,
         fetchWindow: Pair<Long, Long> = Pair(0, 0),
     ): List<Episode> {
-        if (rawSourceEpisodes.isEmpty() && !source.isLocal()) {
+        // ANZ -->
+        if (rawSourceEpisodes.isEmpty() && !source.isLocal() && !source.id.isRemoteServerSourceId()) {
+            // ANZ <--
             throw NoResultsException()
         }
 

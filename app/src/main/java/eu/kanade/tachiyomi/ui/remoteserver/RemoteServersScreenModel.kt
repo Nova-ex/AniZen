@@ -3,7 +3,6 @@ package eu.kanade.tachiyomi.ui.remoteserver
 import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
-import eu.kanade.tachiyomi.data.remoteserver.RemoteDownloadManager
 import eu.kanade.tachiyomi.data.remoteserver.RemoteServerClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,13 +26,11 @@ class RemoteServersScreenModel(
     private val getRemoteServers: GetRemoteServers = Injekt.get(),
     private val saveRemoteServer: SaveRemoteServer = Injekt.get(),
     private val deleteRemoteServer: DeleteRemoteServer = Injekt.get(),
-    private val remoteDownloadManager: RemoteDownloadManager = Injekt.get(),
 ) : ScreenModel {
 
     sealed interface Dialog {
         data class Editor(val server: RemoteServer?) : Dialog
         data class Delete(val server: RemoteServer) : Dialog
-        data object Downloads : Dialog
     }
 
     sealed interface TestConnectionState {
@@ -46,7 +43,6 @@ class RemoteServersScreenModel(
     @Immutable
     data class State(
         val servers: List<RemoteServer> = emptyList(),
-        val downloads: List<RemoteDownloadManager.RemoteDownloadTask> = emptyList(),
         val dialog: Dialog? = null,
         val testState: TestConnectionState = TestConnectionState.Idle,
     )
@@ -56,13 +52,11 @@ class RemoteServersScreenModel(
 
     val state: StateFlow<State> = combine(
         getRemoteServers.subscribeAll(),
-        remoteDownloadManager.tasks,
         _dialog,
         _testState,
-    ) { servers, downloads, dialog, testState ->
+    ) { servers, dialog, testState ->
         State(
             servers = servers,
-            downloads = downloads,
             dialog = dialog,
             testState = testState,
         )
@@ -83,10 +77,6 @@ class RemoteServersScreenModel(
 
     fun openDeleteDialog(server: RemoteServer) {
         _dialog.update { Dialog.Delete(server) }
-    }
-
-    fun openDownloadsDialog() {
-        _dialog.update { Dialog.Downloads }
     }
 
     fun dismissDialog() {
@@ -136,14 +126,6 @@ class RemoteServersScreenModel(
             )
         }
     }
-
-    fun pauseDownload(taskId: String) = remoteDownloadManager.pause(taskId)
-
-    fun retryDownload(taskId: String) = remoteDownloadManager.retry(taskId)
-
-    fun cancelDownload(taskId: String) = remoteDownloadManager.cancel(taskId)
-
-    fun clearFinishedDownloads() = remoteDownloadManager.clearFinished()
 
     companion object {
         private const val STOP_TIMEOUT_MS = 5_000L

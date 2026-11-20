@@ -24,7 +24,9 @@ import eu.kanade.tachiyomi.source.ConfigurableSource
 import eu.kanade.tachiyomi.source.Source
 import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.domain.library.model.LibraryDisplayMode
+import tachiyomi.domain.remoteserver.model.isRemoteServerSourceId
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.ank.AMR
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.source.localanime.LocalAnimeSource
 import uy.kohesive.injekt.Injekt
@@ -51,10 +53,16 @@ fun BrowseSourceToolbar(
     subtitle: String? = null,
     searchEnabled: Boolean = true,
     showMore: Boolean = true,
+    // ANZ -->
+    onRemoteServersClick: (() -> Unit)? = null,
+    // ANZ <--
 ) {
     // Avoid capturing unstable source in actions lambda
     val title = source?.name
     val isLocalSource = source is LocalAnimeSource
+    // ANZ -->
+    val isRemoteSource = source?.id?.isRemoteServerSourceId() == true
+    // ANZ <--
     val isConfigurableSource = source is ConfigurableSource
 
     val mode = displayMode ?: LibraryDisplayMode.default
@@ -114,6 +122,17 @@ fun BrowseSourceToolbar(
                                             onClick = onHelpClick,
                                         ),
                                     )
+                                    // ANZ -->
+                                } else if (isRemoteSource) {
+                                    if (onRemoteServersClick != null) {
+                                        add(
+                                            AppBar.OverflowAction(
+                                                title = stringResource(AMR.strings.label_remote_servers),
+                                                onClick = onRemoteServersClick,
+                                            ),
+                                        )
+                                    }
+                                    // ANZ <--
                                 } else {
                                     add(
                                         AppBar.OverflowAction(

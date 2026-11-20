@@ -64,8 +64,6 @@ import eu.kanade.tachiyomi.data.database.models.Episode
 import eu.kanade.tachiyomi.data.database.models.toDomainEpisode
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.download.model.Download
-import eu.kanade.tachiyomi.data.remoteserver.RemoteFileItem
-import eu.kanade.tachiyomi.data.remoteserver.RemoteStreamProxyServer
 import eu.kanade.tachiyomi.data.saver.Image
 import eu.kanade.tachiyomi.data.saver.ImageSaver
 import eu.kanade.tachiyomi.data.saver.Location
@@ -148,10 +146,6 @@ import tachiyomi.domain.history.interactor.GetNextEpisodes
 import tachiyomi.domain.history.interactor.UpsertHistory
 import tachiyomi.domain.history.model.HistoryUpdate
 import tachiyomi.domain.library.service.LibraryPreferences
-import tachiyomi.domain.remoteserver.interactor.GetRemotePlaybackHistory
-import tachiyomi.domain.remoteserver.interactor.GetRemoteServers
-import tachiyomi.domain.remoteserver.interactor.UpsertRemotePlaybackHistory
-import tachiyomi.domain.remoteserver.model.RemotePlaybackHistory
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.storage.service.StorageManager
 import tachiyomi.domain.track.interactor.GetTracks
@@ -206,9 +200,6 @@ class PlayerViewModel @JvmOverloads constructor(
     // ANZ -->
     private val animeFillerListFetcher: AnimeFillerListFetcher = AnimeFillerListFetcher(),
     private val decoderPreferences: DecoderPreferences = Injekt.get(),
-    private val getRemoteServers: GetRemoteServers = Injekt.get(),
-    private val getRemotePlaybackHistory: GetRemotePlaybackHistory = Injekt.get(),
-    private val upsertRemotePlaybackHistory: UpsertRemotePlaybackHistory = Injekt.get(),
     // ANZ <--
 ) : AndroidViewModel(context) {
 
@@ -541,14 +532,6 @@ class PlayerViewModel @JvmOverloads constructor(
         // ANK <--
         // ANZ -->
         mpv.setPropertyInt("user-data/current-anime/intro-length", getAnimeSkipIntroLength())
-
-        paused
-            .onEach { isPaused ->
-                if (isPaused == true && isRemotePlayback) {
-                    saveCurrentRemoteProgressImmediate()
-                }
-            }
-            .launchIn(viewModelScope)
         // ANZ <--
     }
 
@@ -1515,12 +1498,6 @@ class PlayerViewModel @JvmOverloads constructor(
     }
 
     override fun onCleared() {
-        // ANZ -->
-        if (isRemotePlayback) {
-            saveCurrentRemoteProgressImmediate()
-        }
-        stopRemoteProxyServer()
-        // ANZ <--
         if (currentEpisode.value != null) {
             saveWatchingProgress(currentEpisode.value!!)
             episodeToDownload?.let {
@@ -2344,13 +2321,6 @@ class PlayerViewModel @JvmOverloads constructor(
      * seen, update tracking services, enqueue downloaded episode deletion and download next episode.
      */
     fun onSecondReached(position: Long) {
-        // ANZ -->
-        if (isRemotePlayback) {
-            handleRemoteSecondReached(position)
-            return
-        }
-        // ANZ <--
-
         // ANK -->
         val syncTriggerOpt = syncPreferences.getSyncTriggerOptions()
         val isSyncEnabled = syncPreferences.isSyncEnabled()
@@ -2484,12 +2454,6 @@ class PlayerViewModel @JvmOverloads constructor(
     // KMK <--
 
     fun saveCurrentEpisodeWatchingProgress() {
-        // ANZ -->
-        if (isRemotePlayback) {
-            saveCurrentRemoteProgressImmediate()
-            return
-        }
-        // ANZ <--
         currentEpisode.value?.let { saveWatchingProgress(it) }
     }
 
@@ -3123,188 +3087,7 @@ class PlayerViewModel @JvmOverloads constructor(
     }
     // ANZ <--
 
-    // ANZ -->
-    private var remoteServerId: Long = -1L
-    private var remoteFilePath: String? = null
-    private var remoteFileName: String = ""
-    private var remoteStartPositionMs: Long = 0L
-    private var remoteProxyServer: RemoteStreamProxyServer? = null
-    private var lastRemoteSavedSecond: Long = -1L
-    private var lastRemoteCompletedSaved: Boolean = false
-
-    val isRemotePlayback: Boolean
-        get() = remoteServerId != -1L && !remoteFilePath.isNullOrBlank()
-
-    fun getRemoteStartPositionMs(): Long = remoteStartPositionMs
-
-    suspend fun initRemote(
-        serverId: Long,
-        filePath: String,
-        fileName: String,
-        fileSize: Long,
-        modifiedAtMillis: Long,
-        subtitlePaths: List<String>,
-        subtitleNames: List<String>,
-        startPositionOverrideMs: Long?,
-    ): Result<Boolean> {
-        if (
-            remoteServerId == serverId &&
-            remoteFilePath == filePath &&
-            startPositionOverrideMs == null &&
-            remoteProxyServer != null
-        ) {
-            return Result.success(true)
-        }
-
-        if (isRemotePlayback) {
-            saveCurrentRemoteProgressImmediate()
-        }
-        stopRemoteProxyServer()
-
-        return try {
-            val server = getRemoteServers.awaitById(serverId)
-                ?: return Result.failure(IllegalStateException("Remote server not found"))
-
-            val startPosMs = if (startPositionOverrideMs != null) {
-                startPositionOverrideMs.coerceAtLeast(0L)
-            } else {
-                getRemotePlaybackHistory.awaitByServerAndPath(serverId, filePath)
-                    ?.resumePositionWithBufferMs()
-                    ?: 0L
-            }
-
-            val videoItem = RemoteFileItem(
-                name = fileName,
-                path = filePath,
-                isDirectory = false,
-                size = fileSize,
-                modifiedAtMillis = modifiedAtMillis,
-            )
-            val subtitleItems = subtitlePaths.zip(subtitleNames).map { (subPath, subName) ->
-                RemoteFileItem(
-                    name = subName,
-                    path = subPath,
-                    isDirectory = false,
-                    size = 0L,
-                    modifiedAtMillis = 0L,
-                )
-            }
-
-            val proxy = RemoteStreamProxyServer(server, videoItem, subtitleItems)
-            proxy.start()
-            remoteProxyServer = proxy
-
-            remoteServerId = serverId
-            remoteFilePath = filePath
-            remoteFileName = fileName
-            remoteStartPositionMs = startPosMs
-            lastRemoteSavedSecond = -1L
-            lastRemoteCompletedSaved = false
-
-            _currentAnime.update { null }
-            _currentEpisode.update { null }
-            _currentSource.update { null }
-            _currentPlaylist.update { persistentListOf() }
-            episodeId = -1L
-            _hasPreviousEpisode.update { false }
-            _hasNextEpisode.update { false }
-            animeTitle.update { server.name }
-            mediaTitle.update { fileName }
-            _isEpisodeOnline.update { true }
-
-            val video = Video(
-                videoUrl = proxy.getVideoUrl(),
-                videoTitle = fileName,
-                subtitleTracks = proxy.getSubtitleTracks(),
-            )
-
-            _currentVideo.update { video }
-            if (hasLoadedTracks.value) {
-                clearTracks()
-            }
-            updateIsLoadingEpisode(true)
-            updateIsLoadingHosters(false)
-            mpv.setPropertyString("user-data/current-anime/anime-title", server.name)
-            mpv.setPropertyString("user-data/current-anime/episode-title", fileName)
-            eventChannel.send(Event.SetVideo(video))
-            Result.success(true)
-        } catch (e: Exception) {
-            stopRemoteProxyServer()
-            Result.failure(e)
-        }
-    }
-
-    private fun handleRemoteSecondReached(position: Long) {
-        if (isLoadingEpisode.value) return
-        val dur = duration.value ?: return
-        if (dur <= 0) return
-
-        val positionMs = position * REMOTE_MS_PER_SECOND
-        val durationMs = dur * REMOTE_MS_PER_SECOND
-        val isCompleted = positionMs >= (durationMs * RemotePlaybackHistory.COMPLETED_THRESHOLD_RATIO).toLong()
-        val shouldSavePeriodic = lastRemoteSavedSecond < 0L ||
-            abs(position - lastRemoteSavedSecond) >= REMOTE_SAVE_INTERVAL_SECONDS
-        val shouldSaveCompletion = isCompleted && !lastRemoteCompletedSaved
-
-        if (shouldSavePeriodic || shouldSaveCompletion) {
-            lastRemoteSavedSecond = position
-            if (isCompleted) lastRemoteCompletedSaved = true
-            saveRemotePlaybackProgress(positionMs, durationMs, isCompleted)
-        }
-    }
-
-    private fun saveCurrentRemoteProgressImmediate() {
-        if (!isRemotePlayback) return
-        if (isLoadingEpisode.value) return
-        val posSeconds = pos.value ?: (if (mpv.isInitialized) mpv.getPropertyInt("time-pos") else null) ?: return
-        val durSeconds = duration.value ?: (if (mpv.isInitialized) mpv.getPropertyInt("duration") else null) ?: return
-        if (durSeconds <= 0) return
-
-        val positionMs = posSeconds * REMOTE_MS_PER_SECOND
-        val durationMs = durSeconds * REMOTE_MS_PER_SECOND
-        val isCompleted = positionMs >= (durationMs * RemotePlaybackHistory.COMPLETED_THRESHOLD_RATIO).toLong()
-        lastRemoteSavedSecond = posSeconds.toLong()
-        if (isCompleted) lastRemoteCompletedSaved = true
-        saveRemotePlaybackProgress(positionMs, durationMs, isCompleted)
-    }
-
-    private fun saveRemotePlaybackProgress(positionMs: Long, durationMs: Long, isCompleted: Boolean) {
-        if (incognitoMode) return
-        val serverId = remoteServerId
-        val path = remoteFilePath ?: return
-        val name = remoteFileName
-        if (serverId == -1L || path.isBlank()) return
-
-        viewModelScope.launchNonCancellable {
-            upsertRemotePlaybackHistory.await(
-                RemotePlaybackHistory(
-                    serverId = serverId,
-                    remoteFilePath = path,
-                    fileName = name,
-                    lastPositionMs = positionMs,
-                    durationMs = durationMs,
-                    isCompleted = isCompleted,
-                    updatedAt = System.currentTimeMillis(),
-                ),
-            )
-        }
-    }
-
-    private fun stopRemoteProxyServer() {
-        val proxy = remoteProxyServer
-        remoteProxyServer = null
-        if (proxy != null) {
-            runCatching { proxy.stop() }
-        }
-    }
-    // ANZ <--
-
 }
-
-// ANZ -->
-private const val REMOTE_MS_PER_SECOND = 1000L
-private const val REMOTE_SAVE_INTERVAL_SECONDS = 5L
-// ANZ <--
 
 private val FONT_EXTENSION_REGEX = Regex($$""".*\.[ot]tf$""")
 

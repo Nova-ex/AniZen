@@ -16,6 +16,7 @@ import eu.kanade.tachiyomi.animesource.model.HttpServer
 import eu.kanade.tachiyomi.animesource.model.Video
 import eu.kanade.tachiyomi.animesource.online.AnimeHttpSource
 import eu.kanade.tachiyomi.data.download.model.Download
+import eu.kanade.tachiyomi.data.remoteserver.RemoteAnimeSource
 import eu.kanade.tachiyomi.data.torrentServer.service.TorrentServerService
 import eu.kanade.tachiyomi.network.HttpException
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -132,6 +133,9 @@ class Downloader(
     }
 
     private fun calculateDynamicConcurrency(host: String): Int {
+        // ANZ -->
+        if (host == "localhost" || host == "127.0.0.1") return 1
+        // ANZ <--
         if (host.contains("animepahe") || host.contains("sibnet") || host.contains("video.sibnet")) return 1 // Adaptive: Hosters failing with multi-threading
 
         val userThreads = preferences.downloadThreads().get().coerceAtLeast(1)
@@ -571,9 +575,14 @@ class Downloader(
 
             var downloadHttpServer: HttpServer? = null
             try {
-                if (video.usesHttpServer() && download.source is AnimeHttpSource) {
-                    val httpSource = download.source as AnimeHttpSource
-                    val port = httpSource.createHttpServer()?.let { server ->
+                // ANZ -->
+                if (video.usesHttpServer()) {
+                    val createdServer = when (val src = download.source) {
+                        is AnimeHttpSource -> src.createHttpServer()
+                        is RemoteAnimeSource -> src.createHttpServer()
+                        else -> null
+                    }
+                    val port = createdServer?.let { server ->
                         downloadHttpServer = server
                         server.start()
                         server.listeningPort
@@ -583,6 +592,7 @@ class Downloader(
                         download.video = rewritten
                     }
                 }
+                // ANZ <--
 
                 val effectiveVideo = download.video ?: video
 

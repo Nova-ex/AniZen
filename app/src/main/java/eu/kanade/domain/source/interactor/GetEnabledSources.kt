@@ -4,6 +4,7 @@ import eu.kanade.domain.source.service.SourcePreferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import tachiyomi.domain.remoteserver.model.isRemoteServerSourceId
 import tachiyomi.domain.source.model.Pin
 import tachiyomi.domain.source.model.Pins
 import tachiyomi.domain.source.model.Source
@@ -24,7 +25,13 @@ class GetEnabledSources(
             repository.getSources(),
         ) { pinnedSourceIds, enabledLanguages, disabledSources, lastUsedSource, sources ->
             sources
-                .filter { it.lang in enabledLanguages || it.id == LocalAnimeSource.ID }
+                // ANZ -->
+                .filter {
+                    it.lang in enabledLanguages ||
+                        it.id == LocalAnimeSource.ID ||
+                        it.id.isRemoteServerSourceId()
+                }
+                // ANZ <--
                 .filterNot { it.id.toString() in disabledSources }
                 .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
                 .flatMap {

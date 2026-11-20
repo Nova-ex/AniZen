@@ -3,6 +3,7 @@ package eu.kanade.tachiyomi.source
 import android.graphics.drawable.Drawable
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.tachiyomi.extension.ExtensionManager
+import tachiyomi.domain.remoteserver.model.isRemoteServerSourceId
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.source.localanime.isLocal
 import uy.kohesive.injekt.Injekt
@@ -33,16 +34,20 @@ fun Source.isLocalOrStub(): Boolean = isLocal() || this is StubSource
 
 // AM (DISCORD) -->
 fun Source?.isNsfw(): Boolean {
-    if (this == null || this.isLocalOrStub()) return false
-    val sourceUsed: eu.kanade.tachiyomi.extension.model.Extension.Installed = Injekt.get<ExtensionManager>().installedExtensionsFlow.value
-        .find { ext: eu.kanade.tachiyomi.extension.model.Extension.Installed -> ext.sources.any { it.id == this.id } }!!
+    // ANZ -->
+    if (this == null || this.isLocalOrStub() || this.id.isRemoteServerSourceId()) return false
+    val sourceUsed = Injekt.get<ExtensionManager>().installedExtensionsFlow.value
+        .find { ext -> ext.sources.any { it.id == this.id } } ?: return false
     return sourceUsed.isNsfw
+    // ANZ <--
 }
 // <-- AM (DISCORD)
 
 // (TORRENT) -->
 fun Source?.isSourceForTorrents(): Boolean {
-    if (this == null || this.isLocalOrStub()) return false
+    // ANZ -->
+    if (this == null || this.isLocalOrStub() || this.id.isRemoteServerSourceId()) return false
+    // ANZ <--
     val sourceUsed = Injekt.get<ExtensionManager>().installedExtensionsFlow.value
         .find { it.sources.any { s -> s.id == this.id } } ?: return false
     return sourceUsed.isTorrent

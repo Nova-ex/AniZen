@@ -85,6 +85,7 @@ import eu.kanade.tachiyomi.ui.browse.migration.search.MigrateDialog
 import eu.kanade.tachiyomi.ui.browse.migration.search.MigrateDialogScreenModel
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreenModel.Listing
 import eu.kanade.tachiyomi.ui.category.CategoryScreen
+import eu.kanade.tachiyomi.ui.remoteserver.RemoteServersScreen
 import eu.kanade.tachiyomi.ui.webview.WebViewScreen
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentSetOf
@@ -223,6 +224,9 @@ data class BrowseSourceScreen(
                         onHelpClick = onHelpClick,
                         onSettingsClick = { navigator.push(SourcePreferencesScreen(sourceId)) },
                         onSearch = screenModel::search,
+                        // ANZ -->
+                        onRemoteServersClick = { navigator.push(RemoteServersScreen) },
+                        // ANZ <--
                         selectedCount = state.selection.size,
                         onUnselectAll = screenModel::clearSelection,
                         onSelectAll = {

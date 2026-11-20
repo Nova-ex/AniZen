@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dangerous
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Dns
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -34,6 +36,7 @@ import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.extension.model.Extension
 import eu.kanade.tachiyomi.extension.util.ExtensionLoader
 import tachiyomi.core.common.util.lang.withIOContext
+import tachiyomi.domain.remoteserver.model.isRemoteServerSourceId
 import tachiyomi.domain.source.model.Source
 import tachiyomi.source.localanime.isLocal
 
@@ -62,6 +65,14 @@ fun SourceIcon(
             Image(
                 bitmap = icon,
                 contentDescription = null,
+                modifier = modifier.then(defaultModifier),
+            )
+        }
+        source.id.isRemoteServerSourceId() -> {
+            Icon(
+                imageVector = Icons.Outlined.Dns,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
                 modifier = modifier.then(defaultModifier),
             )
         }

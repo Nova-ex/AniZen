@@ -2,10 +2,13 @@ package eu.kanade.tachiyomi.ui.browse.source
 
 import android.app.Application
 import eu.kanade.presentation.browse.SourceUiModel
+import eu.kanade.tachiyomi.data.remoteserver.RemoteAnimeSource
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.network.model.NodeStatus
 import eu.kanade.tachiyomi.util.system.LocaleHelper
+import tachiyomi.domain.remoteserver.model.isRemoteServerSourceId
 import tachiyomi.domain.source.model.Source
+import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
@@ -30,13 +33,24 @@ class SourceUiModelMapper(
             sourceClass.contains("Api") ||
             sourceClass.contains("Json")
 
-        val secondaryText = buildString {
-            append(sourceLangString)
-            if (extensionName != null && extensionName != source.name) {
-                append(" • ")
-                append(extensionName)
+        // ANZ -->
+        val remoteSource = if (source.id.isRemoteServerSourceId()) {
+            Injekt.get<SourceManager>().get(source.id) as? RemoteAnimeSource
+        } else {
+            null
+        }
+        val secondaryText = if (remoteSource != null) {
+            "${remoteSource.server.protocol.name} • ${remoteSource.server.host}:${remoteSource.server.port}"
+        } else {
+            buildString {
+                append(sourceLangString)
+                if (extensionName != null && extensionName != source.name) {
+                    append(" • ")
+                    append(extensionName)
+                }
             }
         }
+        // ANZ <--
 
         return SourceUiModel.Item(
             source = source,

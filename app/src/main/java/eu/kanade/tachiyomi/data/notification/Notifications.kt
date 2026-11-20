@@ -44,10 +44,6 @@ object Notifications {
     const val CHANNEL_DOWNLOADER_ERROR = "downloader_error_channel"
     const val ID_DOWNLOAD_CHAPTER_ERROR = -202
     const val ID_DOWNLOAD_EPISODE_ERROR = -204
-    // ANZ -->
-    const val ID_REMOTE_DOWNLOAD_FOREGROUND = -206
-    const val ID_REMOTE_DOWNLOAD_BASE = -21000
-    // ANZ <--
 
     /**
      * Notification channel and ids used by the library updater.

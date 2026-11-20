@@ -27,6 +27,23 @@ import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
 // ANZ -->
+data class RemoteFileEntry(
+    val item: RemoteFileItem,
+    val relativeSubfolder: String,
+)
+
+interface RemoteListingClient : Closeable {
+    fun listDirectory(remotePath: String): List<RemoteFileItem>
+
+    fun statFileSize(remotePath: String): Long
+
+    fun readSmallFileBytes(remotePath: String, maxBytes: Int = MAX_SUBTITLE_BYTES): ByteArray
+
+    companion object {
+        const val MAX_SUBTITLE_BYTES = 8 * 1024 * 1024
+    }
+}
+
 object RemoteServerClient {
 
     private const val CONNECT_TIMEOUT_MS = 15_000
@@ -35,7 +52,7 @@ object RemoteServerClient {
     private const val KEEP_ALIVE_COUNT_MAX = 3
     private const val BUFFER_SIZE = 8192
     private const val MS_PER_SECOND = 1000L
-    private const val MAX_SUBTITLE_BYTES = 8 * 1024 * 1024
+    private const val DEFAULT_MAX_DEPTH = 3
 
     class RemoteStreamHandle(
         val inputStream: InputStream,
@@ -62,9 +79,76 @@ object RemoteServerClient {
         }
     }
 
+    class FtpSessionHolder(
+        private val server: RemoteServer,
+    ) : RemoteListingClient {
+        private var client: FTPClient? = null
+        private val lock = Any()
+
+        private fun ensureClientLocked(): FTPClient {
+            val existing = client
+            if (existing != null && existing.isConnected && runCatching { existing.sendNoOp() }.getOrDefault(false)) {
+                return existing
+            }
+            if (existing != null) {
+                disconnectFtpQuietly(existing)
+            }
+            val created = createConnectedFtpClient(server)
+            client = created
+            return created
+        }
+
+        private fun resetClientLocked() {
+            client?.let { disconnectFtpQuietly(it) }
+            client = null
+        }
+
+        override fun listDirectory(remotePath: String): List<RemoteFileItem> {
+            val targetPath = RemoteFileItem.normalizePath(remotePath)
+            synchronized(lock) {
+                return try {
+                    listFtpDirectoryWithClient(ensureClientLocked(), targetPath)
+                } catch (e: IOException) {
+                    resetClientLocked()
+                    listFtpDirectoryWithClient(ensureClientLocked(), targetPath)
+                }
+            }
+        }
+
+        override fun statFileSize(remotePath: String): Long {
+            val targetPath = RemoteFileItem.normalizePath(remotePath)
+            synchronized(lock) {
+                return try {
+                    statFtpFileSizeWithClient(ensureClientLocked(), targetPath)
+                } catch (e: IOException) {
+                    resetClientLocked()
+                    statFtpFileSizeWithClient(ensureClientLocked(), targetPath)
+                }
+            }
+        }
+
+        override fun readSmallFileBytes(remotePath: String, maxBytes: Int): ByteArray {
+            val targetPath = RemoteFileItem.normalizePath(remotePath)
+            synchronized(lock) {
+                return try {
+                    readFtpSmallBytesWithClient(ensureClientLocked(), targetPath, maxBytes)
+                } catch (e: IOException) {
+                    resetClientLocked()
+                    readFtpSmallBytesWithClient(ensureClientLocked(), targetPath, maxBytes)
+                }
+            }
+        }
+
+        override fun close() {
+            synchronized(lock) {
+                resetClientLocked()
+            }
+        }
+    }
+
     class SftpSessionHolder(
         private val server: RemoteServer,
-    ) : Closeable {
+    ) : RemoteListingClient {
         private var session: Session? = null
         private val lock = Any()
 
@@ -87,11 +171,51 @@ object RemoteServerClient {
             return created
         }
 
+        override fun listDirectory(remotePath: String): List<RemoteFileItem> {
+            val targetPath = RemoteFileItem.normalizePath(remotePath)
+            val channel = openSftpChannel()
+            return try {
+                listSftpDirectoryWithChannel(channel, targetPath)
+            } finally {
+                runCatching { channel.disconnect() }
+            }
+        }
+
+        override fun statFileSize(remotePath: String): Long {
+            val targetPath = RemoteFileItem.normalizePath(remotePath)
+            val channel = openSftpChannel()
+            return try {
+                val attrs = channel.stat(targetPath)
+                if (attrs.isDir) -1L else attrs.size
+            } finally {
+                runCatching { channel.disconnect() }
+            }
+        }
+
+        override fun readSmallFileBytes(remotePath: String, maxBytes: Int): ByteArray {
+            val targetPath = RemoteFileItem.normalizePath(remotePath)
+            val channel = openSftpChannel()
+            return try {
+                channel.get(targetPath).use { stream ->
+                    readBoundedBytes(stream, maxBytes)
+                }
+            } finally {
+                runCatching { channel.disconnect() }
+            }
+        }
+
         override fun close() {
             synchronized(lock) {
                 runCatching { session?.disconnect() }
                 session = null
             }
+        }
+    }
+
+    fun openListingClient(server: RemoteServer): RemoteListingClient {
+        return when (server.protocol) {
+            RemoteProtocol.FTP, RemoteProtocol.FTPS -> FtpSessionHolder(server)
+            RemoteProtocol.SFTP -> SftpSessionHolder(server)
         }
     }
 
@@ -108,6 +232,53 @@ object RemoteServerClient {
             RemoteProtocol.FTP, RemoteProtocol.FTPS -> listFtpDirectory(server, targetPath)
             RemoteProtocol.SFTP -> listSftpDirectory(server, targetPath)
         }
+    }
+
+    fun listDirectoryRecursive(
+        server: RemoteServer,
+        remotePath: String,
+        maxDepth: Int = DEFAULT_MAX_DEPTH,
+        client: RemoteListingClient? = null,
+    ): List<RemoteFileEntry> {
+        if (client != null) {
+            return collectDirectoryRecursive(client, remotePath, maxDepth)
+        }
+        return openListingClient(server).use { owned ->
+            collectDirectoryRecursive(owned, remotePath, maxDepth)
+        }
+    }
+
+    private fun collectDirectoryRecursive(
+        client: RemoteListingClient,
+        rootPath: String,
+        maxDepth: Int,
+    ): List<RemoteFileEntry> {
+        val normalizedRoot = RemoteFileItem.normalizePath(rootPath)
+        val result = mutableListOf<RemoteFileEntry>()
+        val visited = HashSet<String>()
+        val queue = ArrayDeque<Triple<String, String, Int>>()
+        queue.addLast(Triple(normalizedRoot, "", 0))
+        visited.add(normalizedRoot)
+
+        while (queue.isNotEmpty()) {
+            val (currentPath, relativeSubfolder, depth) = queue.removeFirst()
+            val items = client.listDirectory(currentPath)
+            for (item in items) {
+                if (item.isDirectory) {
+                    if (depth < maxDepth && visited.add(item.path)) {
+                        val childSubfolder = if (relativeSubfolder.isEmpty()) {
+                            item.name
+                        } else {
+                            "$relativeSubfolder/${item.name}"
+                        }
+                        queue.addLast(Triple(item.path, childSubfolder, depth + 1))
+                    }
+                } else {
+                    result.add(RemoteFileEntry(item = item, relativeSubfolder = relativeSubfolder))
+                }
+            }
+        }
+        return result
     }
 
     fun statFileSize(server: RemoteServer, remotePath: String): Long {
@@ -134,60 +305,102 @@ object RemoteServerClient {
     fun readSmallFileBytes(
         server: RemoteServer,
         remotePath: String,
-        maxBytes: Int = MAX_SUBTITLE_BYTES,
+        maxBytes: Int = RemoteListingClient.MAX_SUBTITLE_BYTES,
     ): ByteArray {
         return openRangeStream(server, remotePath, 0L).use { stream ->
-            val out = ByteArrayOutputStream()
-            val buffer = ByteArray(BUFFER_SIZE)
-            var total = 0
-            while (total < maxBytes) {
-                val read = stream.read(buffer, 0, minOf(buffer.size, maxBytes - total))
-                if (read <= 0) break
-                out.write(buffer, 0, read)
-                total += read
-            }
-            out.toByteArray()
+            readBoundedBytes(stream, maxBytes)
         }
+    }
+
+    private fun readBoundedBytes(stream: InputStream, maxBytes: Int): ByteArray {
+        val out = ByteArrayOutputStream()
+        val buffer = ByteArray(BUFFER_SIZE)
+        var total = 0
+        while (total < maxBytes) {
+            val read = stream.read(buffer, 0, minOf(buffer.size, maxBytes - total))
+            if (read <= 0) break
+            out.write(buffer, 0, read)
+            total += read
+        }
+        return out.toByteArray()
     }
 
     private fun listFtpDirectory(server: RemoteServer, targetPath: String): List<RemoteFileItem> {
         val client = createConnectedFtpClient(server)
         return try {
-            val files: Array<FTPFile> = client.listFiles(targetPath) ?: emptyArray()
-            files.mapNotNull { file ->
-                val name = file.name ?: return@mapNotNull null
-                if (name == "." || name == "..") return@mapNotNull null
-                val fullPath = RemoteFileItem.joinPath(targetPath, name)
-                val isDir = if (file.isSymbolicLink) {
-                    runCatching { client.changeWorkingDirectory(fullPath) }.getOrDefault(false)
-                } else {
-                    file.isDirectory
-                }
-                RemoteFileItem(
-                    name = name,
-                    path = fullPath,
-                    isDirectory = isDir,
-                    size = if (isDir) 0L else file.size.coerceAtLeast(0L),
-                    modifiedAtMillis = file.timestamp?.timeInMillis ?: 0L,
-                )
-            }
+            listFtpDirectoryWithClient(client, targetPath)
         } finally {
             disconnectFtpQuietly(client)
+        }
+    }
+
+    private fun listFtpDirectoryWithClient(client: FTPClient, targetPath: String): List<RemoteFileItem> {
+        val files: Array<FTPFile> = client.listFiles(targetPath) ?: emptyArray()
+        return files.mapNotNull { file ->
+            val name = file.name ?: return@mapNotNull null
+            if (name == "." || name == "..") return@mapNotNull null
+            val fullPath = RemoteFileItem.joinPath(targetPath, name)
+            val isDir = if (file.isSymbolicLink) {
+                runCatching { client.changeWorkingDirectory(fullPath) }.getOrDefault(false)
+            } else {
+                file.isDirectory
+            }
+            RemoteFileItem(
+                name = name,
+                path = fullPath,
+                isDirectory = isDir,
+                size = if (isDir) 0L else file.size.coerceAtLeast(0L),
+                modifiedAtMillis = file.timestamp?.timeInMillis ?: 0L,
+            )
         }
     }
 
     private fun statFtpFileSize(server: RemoteServer, targetPath: String): Long {
         val client = createConnectedFtpClient(server)
         return try {
-            val sizeReply = runCatching { client.getSize(targetPath)?.toLongOrNull() }.getOrNull()
-            if (sizeReply != null && sizeReply >= 0L) {
-                return sizeReply
-            }
-            val files = client.listFiles(targetPath)
-            files?.firstOrNull { !it.isDirectory }?.size ?: -1L
+            statFtpFileSizeWithClient(client, targetPath)
         } finally {
             disconnectFtpQuietly(client)
         }
+    }
+
+    private fun statFtpFileSizeWithClient(client: FTPClient, targetPath: String): Long {
+        val sizeReply = runCatching { client.getSize(targetPath)?.toLongOrNull() }.getOrNull()
+        if (sizeReply != null && sizeReply >= 0L) {
+            return sizeReply
+        }
+        val files = client.listFiles(targetPath)
+        return files?.firstOrNull { !it.isDirectory }?.size ?: -1L
+    }
+
+    private fun readFtpSmallBytesWithClient(client: FTPClient, targetPath: String, maxBytes: Int): ByteArray {
+        val stream = client.retrieveFileStream(targetPath)
+            ?: throw IOException(
+                "FTP retrieve failed (${client.replyCode}): ${client.replyString?.trim().orEmpty()}",
+            )
+        val out = ByteArrayOutputStream()
+        var reachedEof = false
+        try {
+            val buffer = ByteArray(BUFFER_SIZE)
+            var total = 0
+            while (total < maxBytes) {
+                val read = stream.read(buffer, 0, minOf(buffer.size, maxBytes - total))
+                if (read <= 0) {
+                    reachedEof = true
+                    break
+                }
+                out.write(buffer, 0, read)
+                total += read
+            }
+        } finally {
+            runCatching { stream.close() }
+            if (reachedEof) {
+                runCatching { client.completePendingCommand() }
+            } else {
+                runCatching { client.abort() }
+            }
+        }
+        return out.toByteArray()
     }
 
     private fun openFtpRangeStream(
@@ -298,24 +511,28 @@ object RemoteServerClient {
         return try {
             channel = session.openChannel("sftp") as ChannelSftp
             channel.connect(CONNECT_TIMEOUT_MS)
-            val entries = channel.ls(targetPath)
-            entries.mapNotNull { entry ->
-                val filename = entry.filename ?: return@mapNotNull null
-                if (filename == "." || filename == "..") return@mapNotNull null
-                val fullPath = RemoteFileItem.joinPath(targetPath, filename)
-                val attrs: SftpATTRS = resolveSftpAttrs(channel, fullPath, entry.attrs)
-                val isDir = attrs.isDir
-                RemoteFileItem(
-                    name = filename,
-                    path = fullPath,
-                    isDirectory = isDir,
-                    size = if (isDir) 0L else attrs.size.coerceAtLeast(0L),
-                    modifiedAtMillis = attrs.mTime.toLong() * MS_PER_SECOND,
-                )
-            }
+            listSftpDirectoryWithChannel(channel, targetPath)
         } finally {
             runCatching { channel?.disconnect() }
             runCatching { session.disconnect() }
+        }
+    }
+
+    private fun listSftpDirectoryWithChannel(channel: ChannelSftp, targetPath: String): List<RemoteFileItem> {
+        val entries = channel.ls(targetPath)
+        return entries.mapNotNull { entry ->
+            val filename = entry.filename ?: return@mapNotNull null
+            if (filename == "." || filename == "..") return@mapNotNull null
+            val fullPath = RemoteFileItem.joinPath(targetPath, filename)
+            val attrs: SftpATTRS = resolveSftpAttrs(channel, fullPath, entry.attrs)
+            val isDir = attrs.isDir
+            RemoteFileItem(
+                name = filename,
+                path = fullPath,
+                isDirectory = isDir,
+                size = if (isDir) 0L else attrs.size.coerceAtLeast(0L),
+                modifiedAtMillis = attrs.mTime.toLong() * MS_PER_SECOND,
+            )
         }
     }
 

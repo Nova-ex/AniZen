@@ -2,7 +2,10 @@ package eu.kanade.tachiyomi.source
 
 import android.content.Context
 import eu.kanade.tachiyomi.data.download.DownloadManager
+import eu.kanade.tachiyomi.data.remoteserver.RemoteAnimeSource
+import eu.kanade.tachiyomi.data.remoteserver.RemoteMetadataResolver
 import eu.kanade.tachiyomi.extension.ExtensionManager
+import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.source.online.HttpSource
 import exh.source.BlacklistedSources
 import exh.source.DelegatedHttpSource
@@ -19,6 +22,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import tachiyomi.domain.remoteserver.interactor.GetRemoteServers
+import tachiyomi.domain.remoteserver.model.toSourceId
 import tachiyomi.domain.source.model.StubSource
 import tachiyomi.domain.source.repository.StubSourceRepository
 import tachiyomi.domain.source.service.SourceManager
@@ -38,6 +44,15 @@ class AndroidSourceManager(
     override val isInitialized: StateFlow<Boolean> = _isInitialized.asStateFlow()
 
     private val downloadManager: DownloadManager by injectLazy()
+
+    // ANZ -->
+    private val getRemoteServers: GetRemoteServers by injectLazy()
+    private val networkHelper: NetworkHelper by injectLazy()
+    private val json: Json by injectLazy()
+    private val remoteMetadataResolver by lazy {
+        RemoteMetadataResolver(context, networkHelper, json)
+    }
+    // ANZ <--
 
     private val scope = CoroutineScope(Job() + Dispatchers.IO)
 
@@ -59,11 +74,15 @@ class AndroidSourceManager(
             combine(
                 extensionManager.installedExtensionsFlow,
                 extensionManager.isInitialized,
-            ) { extensions, isExtensionManagerInitialized ->
-                extensions to isExtensionManagerInitialized
-            }.collectLatest { (extensions, isExtensionManagerInitialized) ->
+                // ANZ -->
+                getRemoteServers.subscribeAll(),
+                // ANZ <--
+            ) { extensions, isExtensionManagerInitialized, remoteServers ->
+                Triple(extensions, isExtensionManagerInitialized, remoteServers)
+            }.collectLatest { (extensions, isExtensionManagerInitialized, remoteServers) ->
                 if (!isExtensionManagerInitialized) return@collectLatest
 
+                val previousMap = sourcesMapFlow.value
                 val mutableMap = ConcurrentHashMap<Long, Source>(
                     mapOf(
                         LocalAnimeSource.ID to LocalAnimeSource(
@@ -80,6 +99,23 @@ class AndroidSourceManager(
                         registerStubSource(StubSource.from(it))
                     }
                 }
+                // ANZ -->
+                remoteServers.forEach { server ->
+                    val existing = previousMap[server.toSourceId()] as? RemoteAnimeSource
+                    val remoteSource = if (existing != null && existing.server == server) {
+                        existing
+                    } else {
+                        RemoteAnimeSource(
+                            server = server,
+                            context = context,
+                            metadataResolver = remoteMetadataResolver,
+                            json = json,
+                        )
+                    }
+                    mutableMap[remoteSource.id] = remoteSource
+                    registerStubSource(StubSource.from(remoteSource))
+                }
+                // ANZ <--
                 sourcesMapFlow.value = mutableMap
                 _isInitialized.value = true
             }
