@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.outlined.CallToAction
 import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.GetApp
 import androidx.compose.material.icons.outlined.Info
@@ -48,10 +49,12 @@ import eu.kanade.presentation.more.settings.widget.SwitchPreferenceWidget
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.home.HomeScreen
 import eu.kanade.tachiyomi.ui.more.DownloadQueueState
+import eu.kanade.tachiyomi.ui.remoteserver.RemoteServersScreen
 import eu.kanade.tachiyomi.ui.stats.InfrastructureScreen
 import kotlinx.coroutines.launch
 import tachiyomi.core.common.Constants
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.ank.AMR
 import tachiyomi.i18n.sy.SYMR
 import tachiyomi.presentation.core.components.ScrollbarLazyColumn
 import tachiyomi.presentation.core.components.material.Scaffold
@@ -173,6 +176,14 @@ fun MoreScreen(
                         icon = Icons.Outlined.Info,
                         onClick = onClickLibraryUpdateErrors,
                     )
+                    // ANZ -->
+                    MoreItem(
+                        title = stringResource(AMR.strings.label_remote_servers),
+                        subtitle = stringResource(AMR.strings.remote_servers_subtitle),
+                        icon = Icons.Outlined.Dns,
+                        onClick = { navigator.push(RemoteServersScreen) },
+                    )
+                    // ANZ <--
                 }
             }
 

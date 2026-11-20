@@ -116,6 +116,10 @@ detekt-compose = { module = "io.nlopez.compose.rules:detekt", version.ref = "det
 markdown-core = { module = "com.mikepenz:multiplatform-markdown-renderer", version.ref = "markdown" }
 markdown-coil = { module = "com.mikepenz:multiplatform-markdown-renderer-coil3", version.ref = "markdown" }
 
+commons-net = "commons-net:commons-net:3.11.1"
+jsch = "com.github.mwiede:jsch:0.2.23"
+bcprov = "org.bouncycastle:bcprov-jdk18on:1.80"
+
 [plugins]
 google-services = { id = "com.google.gms.google-services", version = "4.4.3" }
 aboutLibraries = { id = "com.mikepenz.aboutlibraries.plugin", version.ref = "aboutlib_version" }

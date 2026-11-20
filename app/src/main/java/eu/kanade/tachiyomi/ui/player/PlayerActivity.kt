@@ -210,6 +210,41 @@ class PlayerActivity : BaseActivity() {
             }
         }
 
+        // ANZ -->
+        private const val EXTRA_REMOTE_SERVER_ID = "remoteServerId"
+        private const val EXTRA_REMOTE_FILE_PATH = "remoteFilePath"
+        private const val EXTRA_REMOTE_FILE_NAME = "remoteFileName"
+        private const val EXTRA_REMOTE_FILE_SIZE = "remoteFileSize"
+        private const val EXTRA_REMOTE_MODIFIED_AT = "remoteModifiedAt"
+        private const val EXTRA_REMOTE_SUBTITLE_PATHS = "remoteSubtitlePaths"
+        private const val EXTRA_REMOTE_SUBTITLE_NAMES = "remoteSubtitleNames"
+        private const val EXTRA_REMOTE_START_POS_MS = "remoteStartPositionMs"
+
+        fun newRemoteIntent(
+            context: Context,
+            serverId: Long,
+            remoteFilePath: String,
+            fileName: String,
+            fileSize: Long,
+            modifiedAtMillis: Long,
+            subtitlePaths: List<String> = emptyList(),
+            subtitleNames: List<String> = emptyList(),
+            startPositionOverrideMs: Long? = null,
+        ): Intent {
+            return Intent(context, PlayerActivity::class.java).apply {
+                putExtra(EXTRA_REMOTE_SERVER_ID, serverId)
+                putExtra(EXTRA_REMOTE_FILE_PATH, remoteFilePath)
+                putExtra(EXTRA_REMOTE_FILE_NAME, fileName)
+                putExtra(EXTRA_REMOTE_FILE_SIZE, fileSize)
+                putExtra(EXTRA_REMOTE_MODIFIED_AT, modifiedAtMillis)
+                putStringArrayListExtra(EXTRA_REMOTE_SUBTITLE_PATHS, ArrayList(subtitlePaths))
+                putStringArrayListExtra(EXTRA_REMOTE_SUBTITLE_NAMES, ArrayList(subtitleNames))
+                putExtra(EXTRA_REMOTE_START_POS_MS, startPositionOverrideMs ?: -1L)
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            }
+        }
+        // ANZ <--
+
         // ANK -->
         /** Upper bound on how long player startup blocks on a pending mpv config copy. */
         private const val MPV_COPY_AWAIT_TIMEOUT_MS = 5_000L
@@ -226,6 +261,43 @@ class PlayerActivity : BaseActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+
+        // ANZ -->
+        val remoteServerId = intent.extras?.getLong(EXTRA_REMOTE_SERVER_ID, -1L) ?: -1L
+        val remoteFilePath = intent.extras?.getString(EXTRA_REMOTE_FILE_PATH)
+        if (remoteServerId != -1L && !remoteFilePath.isNullOrBlank()) {
+            val remoteFileName = intent.extras?.getString(EXTRA_REMOTE_FILE_NAME)
+                ?: remoteFilePath.substringAfterLast('/')
+            val remoteFileSize = intent.extras?.getLong(EXTRA_REMOTE_FILE_SIZE, 0L) ?: 0L
+            val remoteModifiedAt = intent.extras?.getLong(EXTRA_REMOTE_MODIFIED_AT, 0L) ?: 0L
+            val subtitlePaths = intent.getStringArrayListExtra(EXTRA_REMOTE_SUBTITLE_PATHS) ?: arrayListOf()
+            val subtitleNames = intent.getStringArrayListExtra(EXTRA_REMOTE_SUBTITLE_NAMES) ?: arrayListOf()
+            val startOverrideRaw = intent.extras?.getLong(EXTRA_REMOTE_START_POS_MS, -1L) ?: -1L
+            val startOverride = startOverrideRaw.takeIf { it >= 0L }
+
+            viewModel.saveCurrentEpisodeWatchingProgress()
+            lifecycleScope.launchNonCancellable {
+                val result = viewModel.initRemote(
+                    serverId = remoteServerId,
+                    filePath = remoteFilePath,
+                    fileName = remoteFileName,
+                    fileSize = remoteFileSize,
+                    modifiedAtMillis = remoteModifiedAt,
+                    subtitlePaths = subtitlePaths,
+                    subtitleNames = subtitleNames,
+                    startPositionOverrideMs = startOverride,
+                )
+                if (result.isFailure) {
+                    val exception = result.exceptionOrNull() ?: IllegalStateException("Failed to open remote stream")
+                    withUIContext {
+                        setInitialEpisodeError(exception)
+                    }
+                }
+            }
+            setIntent(intent)
+            return
+        }
+        // ANZ <--
 
         val animeId = intent.extras?.getLong("animeId") ?: -1
         val episodeId = intent.extras?.getLong("episodeId") ?: -1
@@ -894,7 +966,11 @@ class PlayerActivity : BaseActivity() {
 
             if (anime != null && episode != null) {
                 builder.setTitle(anime.title).setSubtitle(episode.name)
+            // ANZ -->
+            } else if (viewModel.isRemotePlayback) {
+                builder.setTitle(viewModel.animeTitle.value).setSubtitle(viewModel.mediaTitle.value)
             }
+            // ANZ <--
         }
         // ANZ -->
         val pausedState = isPaused ?: (viewModel.paused.value ?: true)
@@ -1241,15 +1317,22 @@ class PlayerActivity : BaseActivity() {
         setHttpOptions(video)
 
         if (viewModel.isLoadingEpisode.value) {
-            viewModel.currentEpisode.value?.let { episode ->
-                val preservePos = playerPreferences.preserveWatchingPosition().get()
-                val resumePosition = position
-                    ?: if (episode.seen && !preservePos) {
-                        0L
-                    } else {
-                        episode.last_second_seen
-                    }
+            // ANZ -->
+            if (viewModel.isRemotePlayback) {
+                val resumePosition = position ?: viewModel.getRemoteStartPositionMs()
                 mpv.command("set", "start", "${resumePosition / 1000F}")
+            } else {
+                // ANZ <--
+                viewModel.currentEpisode.value?.let { episode ->
+                    val preservePos = playerPreferences.preserveWatchingPosition().get()
+                    val resumePosition = position
+                        ?: if (episode.seen && !preservePos) {
+                            0L
+                        } else {
+                            episode.last_second_seen
+                        }
+                    mpv.command("set", "start", "${resumePosition / 1000F}")
+                }
             }
         } else {
             viewModel.pos.value?.let {
@@ -1631,6 +1714,14 @@ class PlayerActivity : BaseActivity() {
 
     private fun setMpvMediaTitle() {
         if (player.isExiting) return
+        // ANZ -->
+        if (viewModel.isRemotePlayback) {
+            val remoteTitle = viewModel.mediaTitle.value
+            mpv.setPropertyString("user-data/current-anime/episode-title", remoteTitle)
+            mpv.setPropertyString("force-media-title", remoteTitle)
+            return
+        }
+        // ANZ <--
         val anime = viewModel.currentAnime.value ?: return
         val episode = viewModel.currentEpisode.value ?: return
 

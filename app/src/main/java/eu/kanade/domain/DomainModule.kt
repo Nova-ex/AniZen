@@ -41,6 +41,8 @@ import tachiyomi.data.episode.EpisodeRepositoryImpl
 import tachiyomi.data.history.ActivityLogRepositoryImpl
 import tachiyomi.data.history.HistoryRepositoryImpl
 import tachiyomi.data.release.ReleaseServiceImpl
+import tachiyomi.data.remoteserver.RemotePlaybackHistoryRepositoryImpl
+import tachiyomi.data.remoteserver.RemoteServerRepositoryImpl
 import tachiyomi.data.source.SourceRepositoryImpl
 import tachiyomi.data.source.StubSourceRepositoryImpl
 import tachiyomi.data.track.TrackRepositoryImpl
@@ -104,6 +106,13 @@ import tachiyomi.domain.history.repository.ActivityLogRepository
 import tachiyomi.domain.history.repository.HistoryRepository
 import tachiyomi.domain.release.interactor.GetApplicationRelease
 import tachiyomi.domain.release.service.ReleaseService
+import tachiyomi.domain.remoteserver.interactor.DeleteRemoteServer
+import tachiyomi.domain.remoteserver.interactor.GetRemotePlaybackHistory
+import tachiyomi.domain.remoteserver.interactor.GetRemoteServers
+import tachiyomi.domain.remoteserver.interactor.SaveRemoteServer
+import tachiyomi.domain.remoteserver.interactor.UpsertRemotePlaybackHistory
+import tachiyomi.domain.remoteserver.repository.RemotePlaybackHistoryRepository
+import tachiyomi.domain.remoteserver.repository.RemoteServerRepository
 import tachiyomi.domain.source.interactor.GetRelatedAnime
 import tachiyomi.domain.source.interactor.GetRemoteAnime
 import tachiyomi.domain.source.interactor.GetSourcesWithNonLibraryAnime
@@ -249,5 +258,16 @@ class DomainModule : InjektModule {
         addFactory { ToggleFavoriteCustomButton(get()) }
 
         addFactory { TrackSelect(get(), get()) }
+
+        // ANZ -->
+        addSingletonFactory<RemoteServerRepository> { RemoteServerRepositoryImpl(get()) }
+        addFactory { GetRemoteServers(get()) }
+        addFactory { SaveRemoteServer(get()) }
+        addFactory { DeleteRemoteServer(get()) }
+
+        addSingletonFactory<RemotePlaybackHistoryRepository> { RemotePlaybackHistoryRepositoryImpl(get()) }
+        addFactory { GetRemotePlaybackHistory(get()) }
+        addFactory { UpsertRemotePlaybackHistory(get()) }
+        // ANZ <--
     }
 }

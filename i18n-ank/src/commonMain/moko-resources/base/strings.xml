@@ -259,4 +259,53 @@
     <!-- Advanced Settings -->
     <string name="pref_redact_sensitive_headers">Redact sensitive headers</string>
     <string name="pref_redact_sensitive_headers_summary">Prevents sensitive HTTP headers like Authorization and Cookie from being logged to crash dumps.</string>
+
+    <!-- Remote File Servers (FTP / FTPS / SFTP) -->
+    <string name="label_remote_servers">Remote servers</string>
+    <string name="remote_servers_subtitle">Browse, stream &amp; download via FTP, FTPS &amp; SFTP</string>
+    <string name="remote_servers_empty">No remote servers configured.\nTap + to add an FTP, FTPS, or SFTP server.</string>
+    <string name="action_add_remote_server">Add server</string>
+    <string name="action_edit_remote_server">Edit server</string>
+    <string name="action_delete_remote_server">Delete server</string>
+    <string name="confirm_delete_remote_server">Delete \"%1$s\" and its playback history?</string>
+    <string name="action_test_connection">Test connection</string>
+    <string name="remote_server_testing">Connecting…</string>
+    <string name="remote_server_test_success">Connected (%1$d items in %2$s)</string>
+    <string name="remote_server_test_failed">Connection failed: %1$s</string>
+    <string name="remote_server_name">Display name</string>
+    <string name="remote_server_protocol">Protocol</string>
+    <string name="remote_server_host">Host / IP address</string>
+    <string name="remote_server_port">Port</string>
+    <string name="remote_server_username">Username</string>
+    <string name="remote_server_password">Password</string>
+    <string name="remote_server_private_key">SSH private key (PEM / OpenSSH)</string>
+    <string name="remote_server_import_key">Import key file</string>
+    <string name="remote_server_key_passphrase">Key passphrase (optional)</string>
+    <string name="remote_server_initial_path">Initial remote path</string>
+    <string name="remote_server_passive_mode">Passive mode (PASV)</string>
+    <string name="remote_server_ftps_implicit">Implicit TLS</string>
+    <string name="remote_server_ftps_implicit_summary">Use implicit TLS on connect instead of explicit AUTH TLS</string>
+    <string name="remote_server_trust_self_signed">Trust self-signed certificates</string>
+    <string name="remote_server_trust_self_signed_summary">Allow untrusted or self-signed TLS certificates</string>
+    <string name="remote_server_validation_error">Display name, host, and valid port are required</string>
+    <string name="remote_browser_empty_folder">This folder is empty</string>
+    <string name="remote_browser_filter_videos">Videos &amp; subtitles only</string>
+    <string name="remote_browser_show_all">Show all files</string>
+    <string name="remote_browser_load_error">Failed to list directory: %1$s</string>
+    <string name="remote_browser_resume_from">Resume from %1$s</string>
+    <string name="remote_browser_watched">Watched</string>
+    <string name="remote_browser_play_from_start">Play from start</string>
+    <string name="remote_browser_mark_watched">Mark as watched</string>
+    <string name="remote_browser_mark_unwatched">Mark as unwatched</string>
+    <string name="remote_browser_download">Download</string>
+    <string name="remote_browser_resume_download">Resume download</string>
+    <string name="remote_browser_retry_download">Retry download</string>
+    <string name="remote_browser_cancel_download">Cancel download</string>
+    <string name="remote_browser_downloads_title">Remote downloads</string>
+    <string name="remote_browser_no_downloads">No active or recent remote downloads</string>
+    <string name="remote_download_started">Downloading %1$s</string>
+    <string name="remote_download_completed">Downloaded %1$s</string>
+    <string name="remote_download_failed">Download failed: %1$s</string>
+    <string name="remote_download_cancelled">Cancelled %1$s</string>
+    <string name="remote_download_channel_name">Remote file downloads</string>
 </resources>

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.TravelExplore
 import androidx.compose.material3.AlertDialog
@@ -27,10 +28,12 @@ import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.TabContent
 import eu.kanade.tachiyomi.ui.browse.source.browse.BrowseSourceScreen
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
+import eu.kanade.tachiyomi.ui.remoteserver.RemoteServersScreen
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.ank.AMR
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable
@@ -40,12 +43,22 @@ fun Screen.sourcesTab(): TabContent {
 
     val globalSearch = stringResource(MR.strings.action_global_search)
     val actionFilter = stringResource(MR.strings.action_filter)
+    // ANZ -->
+    val remoteServers = stringResource(AMR.strings.label_remote_servers)
+    // ANZ <--
 
-    return remember(globalSearch, actionFilter) {
+    return remember(globalSearch, actionFilter, remoteServers) {
         TabContent(
             titleRes = MR.strings.label_sources,
             searchEnabled = false,
             actions = persistentListOf(
+                // ANZ -->
+                AppBar.Action(
+                    title = remoteServers,
+                    icon = Icons.Outlined.Dns,
+                    onClick = { navigator.push(RemoteServersScreen) },
+                ),
+                // ANZ <--
                 AppBar.Action(
                     title = globalSearch,
                     icon = Icons.Outlined.TravelExplore,

@@ -1,0 +1,84 @@
+import kotlin.Boolean;
+
+CREATE TABLE remote_servers (
+    _id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    protocol TEXT NOT NULL,
+    host TEXT NOT NULL,
+    port INTEGER NOT NULL,
+    username TEXT NOT NULL,
+    encrypted_password TEXT NOT NULL,
+    encrypted_private_key TEXT NOT NULL,
+    encrypted_key_passphrase TEXT NOT NULL,
+    initial_path TEXT NOT NULL DEFAULT '/',
+    passive_mode INTEGER AS Boolean NOT NULL DEFAULT 1,
+    ftps_implicit INTEGER AS Boolean NOT NULL DEFAULT 0,
+    trust_self_signed INTEGER AS Boolean NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+);
+
+findAll:
+SELECT *
+FROM remote_servers
+ORDER BY name COLLATE NOCASE ASC, _id ASC;
+
+findById:
+SELECT *
+FROM remote_servers
+WHERE _id = :id;
+
+insert:
+INSERT INTO remote_servers (
+    name,
+    protocol,
+    host,
+    port,
+    username,
+    encrypted_password,
+    encrypted_private_key,
+    encrypted_key_passphrase,
+    initial_path,
+    passive_mode,
+    ftps_implicit,
+    trust_self_signed,
+    created_at
+)
+VALUES (
+    :name,
+    :protocol,
+    :host,
+    :port,
+    :username,
+    :encryptedPassword,
+    :encryptedPrivateKey,
+    :encryptedKeyPassphrase,
+    :initialPath,
+    :passiveMode,
+    :ftpsImplicit,
+    :trustSelfSigned,
+    :createdAt
+);
+
+update:
+UPDATE remote_servers
+SET
+    name = :name,
+    protocol = :protocol,
+    host = :host,
+    port = :port,
+    username = :username,
+    encrypted_password = :encryptedPassword,
+    encrypted_private_key = :encryptedPrivateKey,
+    encrypted_key_passphrase = :encryptedKeyPassphrase,
+    initial_path = :initialPath,
+    passive_mode = :passiveMode,
+    ftps_implicit = :ftpsImplicit,
+    trust_self_signed = :trustSelfSigned
+WHERE _id = :id;
+
+delete:
+DELETE FROM remote_servers
+WHERE _id = :id;
+
+selectLastInsertedRowId:
+SELECT last_insert_rowid();

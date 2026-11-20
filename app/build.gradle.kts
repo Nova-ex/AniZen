@@ -188,6 +188,10 @@ android {
                 "META-INF/NOTICE",
                 "META-INF/README.md",
                 "META-INF/versions/9/OSGI-INF/MANIFEST.MF",
+                // ANZ -->
+                "META-INF/versions/*/OSGI-INF/MANIFEST.MF",
+                "META-INF/BCKEY.*",
+                // ANZ <--
             )
         }
     }
@@ -414,6 +418,12 @@ dependencies {
     implementation(aniyomilibs.bundles.cast)
     // nanohttpd server
     implementation(aniyomilibs.nanohttpd)
+    // ANZ -->
+    // FTP / FTPS / SFTP clients
+    implementation(libs.commons.net)
+    implementation(libs.jsch)
+    implementation(libs.bcprov)
+    // ANZ <--
 }
 
 androidComponents {

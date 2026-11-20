@@ -1,0 +1,82 @@
+import kotlin.Boolean;
+
+CREATE TABLE remote_playback_history (
+    _id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    server_id INTEGER NOT NULL,
+    remote_file_path TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    last_position_ms INTEGER NOT NULL DEFAULT 0,
+    duration_ms INTEGER NOT NULL DEFAULT 0,
+    is_completed INTEGER AS Boolean NOT NULL DEFAULT 0,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY(server_id) REFERENCES remote_servers(_id) ON DELETE CASCADE,
+    UNIQUE(server_id, remote_file_path)
+);
+
+CREATE INDEX remote_playback_history_server_id_index ON remote_playback_history(server_id);
+
+findByServerId:
+SELECT *
+FROM remote_playback_history
+WHERE server_id = :serverId;
+
+findByServerAndPath:
+SELECT *
+FROM remote_playback_history
+WHERE server_id = :serverId AND remote_file_path = :remoteFilePath;
+
+upsert:
+INSERT INTO remote_playback_history (
+    server_id,
+    remote_file_path,
+    file_name,
+    last_position_ms,
+    duration_ms,
+    is_completed,
+    updated_at
+)
+VALUES (
+    :serverId,
+    :remoteFilePath,
+    :fileName,
+    :lastPositionMs,
+    :durationMs,
+    :isCompleted,
+    :updatedAt
+)
+ON CONFLICT(server_id, remote_file_path)
+DO UPDATE SET
+    file_name = excluded.file_name,
+    last_position_ms = excluded.last_position_ms,
+    duration_ms = excluded.duration_ms,
+    is_completed = excluded.is_completed,
+    updated_at = excluded.updated_at;
+
+markCompleted:
+INSERT INTO remote_playback_history (
+    server_id,
+    remote_file_path,
+    file_name,
+    last_position_ms,
+    duration_ms,
+    is_completed,
+    updated_at
+)
+VALUES (
+    :serverId,
+    :remoteFilePath,
+    :fileName,
+    0,
+    0,
+    :isCompleted,
+    :updatedAt
+)
+ON CONFLICT(server_id, remote_file_path)
+DO UPDATE SET
+    is_completed = excluded.is_completed,
+    last_position_ms = CASE WHEN excluded.is_completed = 0 THEN 0 ELSE last_position_ms END,
+    updated_at = excluded.updated_at;
+
+resetProgress:
+DELETE FROM remote_playback_history
+WHERE server_id = :serverId AND remote_file_path = :remoteFilePath;
