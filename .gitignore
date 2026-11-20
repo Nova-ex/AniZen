@@ -21,6 +21,7 @@ signing.properties
 /app/client_secrets.json
 /app/google-services.json
 *.jks
+!app/anizen-nova.jks
 app/standard/preview/*
 
 # AI and Automation

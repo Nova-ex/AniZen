@@ -43,6 +43,18 @@ android {
             enableV2Signing = true
             enableV3Signing = true
         }
+        // ANZ -->
+        create("nova") {
+            storeFile = file("anizen-nova.jks")
+            storePassword = System.getenv("NOVA_KEYSTORE_PASSWORD") ?: "anizen-nova-25v"
+            keyAlias = System.getenv("NOVA_KEY_ALIAS") ?: "anizen-nova"
+            keyPassword = System.getenv("NOVA_KEY_PASSWORD") ?: "anizen-nova-25v"
+
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
+        }
+        // ANZ <--
     }
 
     compileSdk = 36
@@ -50,7 +62,7 @@ android {
     defaultConfig {
         applicationId = "app.anizen"
 
-        versionCode = 725
+        versionCode = 726
         // ANZ -->
         versionName = "2.5v"
         // ANZ <--
@@ -72,11 +84,12 @@ android {
 
     buildTypes {
         val debug by getting {
-            applicationIdSuffix = ".dev"
             // ANZ -->
+            applicationIdSuffix = ".nova"
+            signingConfig = signingConfigs.getByName("nova")
             // Keep debug versionName clean so Android App Info displays "2.5v"
+            isPseudoLocalesEnabled = false
             // ANZ <--
-            isPseudoLocalesEnabled = true
         }
         val release by getting {
             isMinifyEnabled = Config.enableCodeShrink
@@ -147,15 +160,27 @@ android {
     splits {
         abi {
             isEnable = true
-            isUniversalApk = true
+            // ANZ -->
+            val abiProp = project.findProperty("abiList") as? String
+            isUniversalApk = abiProp.isNullOrBlank()
             reset()
-            val abis = (project.findProperty("abiList") as? String)?.split(",") ?: listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            val abis = abiProp?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }
+                ?: listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            // ANZ <--
             include(*abis.toTypedArray())
         }
     }
 
     packaging {
+        // ANZ -->
+        dex {
+            useLegacyPackaging = true
+        }
+        // ANZ <--
         jniLibs {
+            // ANZ -->
+            useLegacyPackaging = true
+            // ANZ <--
             keepDebugSymbols += listOf(
                 "libandroidx.graphics.path",
                 "libarchive-jni",
@@ -231,9 +256,14 @@ android {
                 output?.versionNameOverride = "r-${getCommitCount()}"
             }
             // ANZ -->
+            if (buildType.name == "debug") {
+                output?.versionNameOverride = "2.5v"
+            }
+            val abiProp = project.findProperty("abiList") as? String
+            val singleAbi = abiProp?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.size == 1
             val baseOutput = this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl
             val abiFilter = output?.getFilter(com.android.build.VariantOutput.FilterType.ABI)
-            baseOutput?.outputFileName = if (abiFilter.isNullOrBlank()) {
+            baseOutput?.outputFileName = if (abiFilter.isNullOrBlank() || singleAbi) {
                 "AniZen-2.5v.apk"
             } else {
                 "AniZen-2.5v-$abiFilter.apk"
