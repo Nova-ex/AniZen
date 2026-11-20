@@ -589,13 +589,13 @@ private fun RemoteFileActionSheet(
                 }
                 ListItem(
                     headlineContent = { Text(resumeLabel) },
-                    leadingIcon = { Icon(Icons.Outlined.PlayArrow, contentDescription = null) },
+                    leadingContent = { Icon(Icons.Outlined.PlayArrow, contentDescription = null) },
                     modifier = Modifier.combinedClickable(onClick = onPlay),
                 )
                 if (history?.shouldResume() == true) {
                     ListItem(
                         headlineContent = { Text(stringResource(AMR.strings.remote_browser_play_from_start)) },
-                        leadingIcon = { Icon(Icons.Outlined.Replay, contentDescription = null) },
+                        leadingContent = { Icon(Icons.Outlined.Replay, contentDescription = null) },
                         modifier = Modifier.combinedClickable(onClick = onPlayFromStart),
                     )
                 }
@@ -612,7 +612,7 @@ private fun RemoteFileActionSheet(
                             ),
                         )
                     },
-                    leadingIcon = {
+                    leadingContent = {
                         Icon(
                             imageVector = if (isWatched) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
                             contentDescription = null,
@@ -627,7 +627,7 @@ private fun RemoteFileActionSheet(
             ) {
                 ListItem(
                     headlineContent = { Text(stringResource(AMR.strings.remote_browser_cancel_download)) },
-                    leadingIcon = { Icon(Icons.Outlined.Download, contentDescription = null) },
+                    leadingContent = { Icon(Icons.Outlined.Download, contentDescription = null) },
                     modifier = Modifier.combinedClickable(onClick = onCancelDownload),
                 )
             } else {
@@ -638,7 +638,7 @@ private fun RemoteFileActionSheet(
                 }
                 ListItem(
                     headlineContent = { Text(downloadLabel) },
-                    leadingIcon = { Icon(Icons.Outlined.Download, contentDescription = null) },
+                    leadingContent = { Icon(Icons.Outlined.Download, contentDescription = null) },
                     modifier = Modifier.combinedClickable(onClick = onDownload),
                 )
             }
