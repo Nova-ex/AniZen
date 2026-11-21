@@ -12,6 +12,11 @@ class Anime4KManager(private val context: Context) {
 
     companion object {
         private const val SHADER_DIR = "shaders"
+
+        // ANZ -->
+        private const val SHADER_VERSION_FILE = ".shader_version"
+        private const val SHADER_BUNDLE_VERSION = "2.6-fix-adreno-v1"
+        // ANZ <--
     }
 
     // Shader quality levels
@@ -54,14 +59,28 @@ class Anime4KManager(private val context: Context) {
                 }
             }
 
+            // ANZ -->
+            val versionFile = File(shaderDir, SHADER_VERSION_FILE)
+            val needsRefresh = !versionFile.exists() ||
+                runCatching { versionFile.readText().trim() }.getOrNull() != SHADER_BUNDLE_VERSION
+            // ANZ <--
+
             // List and copy all shader files from assets
             val shaderFiles = context.assets.list(SHADER_DIR) ?: emptyArray()
 
             for (fileName in shaderFiles) {
                 if (fileName.endsWith(".glsl")) {
-                    copyShaderFromAssets(fileName)
+                    // ANZ -->
+                    copyShaderFromAssets(fileName, overwrite = needsRefresh)
+                    // ANZ <--
                 }
             }
+
+            // ANZ -->
+            if (needsRefresh) {
+                runCatching { versionFile.writeText(SHADER_BUNDLE_VERSION) }
+            }
+            // ANZ <--
 
             isInitialized = true
             true
@@ -71,13 +90,15 @@ class Anime4KManager(private val context: Context) {
         }
     }
 
-    private fun copyShaderFromAssets(fileName: String): Boolean {
+    // ANZ -->
+    private fun copyShaderFromAssets(fileName: String, overwrite: Boolean = false): Boolean {
         val destFile = File(shaderDir, fileName)
 
-        // Skip if file already exists and is valid
-        if (destFile.exists() && destFile.length() > 0) {
+        // Skip only if file already exists, is valid, and bundle version matches
+        if (!overwrite && destFile.exists() && destFile.length() > 0) {
             return false
         }
+        // ANZ <--
 
         return try {
             context.assets.open("$SHADER_DIR/$fileName").use { input ->
@@ -109,7 +130,15 @@ class Anime4KManager(private val context: Context) {
         }
 
         val shaders = mutableListOf<String>()
-        val q = quality.suffix
+        // ANZ -->
+        val primary = quality.suffix
+        // FAST uses single lightweight x2 CNN pass (no double-stacking) for smooth tablet playback.
+        // BALANCED pairs M -> S and HIGH pairs L -> M so 480p->1440p stays crisp without heavy L+L stacking.
+        val secondary: String? = when (quality) {
+            Quality.FAST -> null
+            Quality.BALANCED -> "S"
+            Quality.HIGH -> "M"
+        }
 
         // Always add Clamp_Highlights (prevent ringing)
         shaders.add(getShaderPath("Anime4K_Clamp_Highlights.glsl"))
@@ -117,50 +146,63 @@ class Anime4KManager(private val context: Context) {
         // Add shaders based on mode
         when (mode) {
             Mode.A -> {
-                // Mode A: Restore -> Upscale -> Upscale
-                shaders.add(getShaderPath("Anime4K_Restore_CNN_$q.glsl"))
-                shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$q.glsl"))
-                shaders.add(getShaderPath("Anime4K_AutoDownscalePre_x2.glsl"))
-                shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$q.glsl"))
+                // Mode A (720p modern anime): Restore -> Upscale (-> optional 2nd Upscale for <=480p)
+                shaders.add(getShaderPath("Anime4K_Restore_CNN_$primary.glsl"))
+                shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$primary.glsl"))
+                if (secondary != null) {
+                    shaders.add(getShaderPath("Anime4K_AutoDownscalePre_x2.glsl"))
+                    shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$secondary.glsl"))
+                }
             }
             Mode.B -> {
-                // Mode B: Restore_Soft -> Upscale -> Upscale
-                shaders.add(getShaderPath("Anime4K_Restore_CNN_Soft_$q.glsl"))
-                shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$q.glsl"))
-                shaders.add(getShaderPath("Anime4K_AutoDownscalePre_x2.glsl"))
-                shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$q.glsl"))
+                // Mode B (720p/older anime): Restore_Soft -> Upscale (-> optional 2nd Upscale)
+                shaders.add(getShaderPath("Anime4K_Restore_CNN_Soft_$primary.glsl"))
+                shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$primary.glsl"))
+                if (secondary != null) {
+                    shaders.add(getShaderPath("Anime4K_AutoDownscalePre_x2.glsl"))
+                    shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$secondary.glsl"))
+                }
             }
             Mode.C -> {
-                // Mode C: Upscale_Denoise -> Upscale
-                shaders.add(getShaderPath("Anime4K_Upscale_Denoise_CNN_x2_$q.glsl"))
-                shaders.add(getShaderPath("Anime4K_AutoDownscalePre_x2.glsl"))
-                shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$q.glsl"))
+                // Mode C (480p compressed streams): Upscale_Denoise (-> optional 2nd Upscale)
+                shaders.add(getShaderPath("Anime4K_Upscale_Denoise_CNN_x2_$primary.glsl"))
+                if (secondary != null) {
+                    shaders.add(getShaderPath("Anime4K_AutoDownscalePre_x2.glsl"))
+                    shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$secondary.glsl"))
+                }
             }
             Mode.A_PLUS -> {
-                // Mode A+A: Restore -> Upscale -> Restore -> Upscale
-                shaders.add(getShaderPath("Anime4K_Restore_CNN_$q.glsl"))
-                shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$q.glsl"))
+                // Mode A+A: Restore -> Upscale -> Restore (-> optional 2nd Upscale)
+                shaders.add(getShaderPath("Anime4K_Restore_CNN_$primary.glsl"))
+                shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$primary.glsl"))
                 shaders.add(getShaderPath("Anime4K_AutoDownscalePre_x2.glsl"))
-                shaders.add(getShaderPath("Anime4K_Restore_CNN_$q.glsl"))
-                shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$q.glsl"))
+                shaders.add(getShaderPath("Anime4K_Restore_CNN_${secondary ?: "S"}.glsl"))
+                if (secondary != null) {
+                    shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$secondary.glsl"))
+                }
             }
             Mode.B_PLUS -> {
-                // Mode B+B: Restore_Soft -> Upscale -> Restore_Soft -> Upscale
-                shaders.add(getShaderPath("Anime4K_Restore_CNN_Soft_$q.glsl"))
-                shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$q.glsl"))
+                // Mode B+B: Restore_Soft -> Upscale -> Restore_Soft (-> optional 2nd Upscale)
+                shaders.add(getShaderPath("Anime4K_Restore_CNN_Soft_$primary.glsl"))
+                shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$primary.glsl"))
                 shaders.add(getShaderPath("Anime4K_AutoDownscalePre_x2.glsl"))
-                shaders.add(getShaderPath("Anime4K_Restore_CNN_Soft_$q.glsl"))
-                shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$q.glsl"))
+                shaders.add(getShaderPath("Anime4K_Restore_CNN_Soft_${secondary ?: "S"}.glsl"))
+                if (secondary != null) {
+                    shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$secondary.glsl"))
+                }
             }
             Mode.C_PLUS -> {
-                // Mode C+A: Upscale_Denoise -> Restore -> Upscale
-                shaders.add(getShaderPath("Anime4K_Upscale_Denoise_CNN_x2_$q.glsl"))
+                // Mode C+A: Upscale_Denoise -> Restore (-> optional 2nd Upscale)
+                shaders.add(getShaderPath("Anime4K_Upscale_Denoise_CNN_x2_$primary.glsl"))
                 shaders.add(getShaderPath("Anime4K_AutoDownscalePre_x2.glsl"))
-                shaders.add(getShaderPath("Anime4K_Restore_CNN_$q.glsl"))
-                shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$q.glsl"))
+                shaders.add(getShaderPath("Anime4K_Restore_CNN_${secondary ?: "S"}.glsl"))
+                if (secondary != null) {
+                    shaders.add(getShaderPath("Anime4K_Upscale_CNN_x2_$secondary.glsl"))
+                }
             }
             Mode.OFF -> {}
         }
+        // ANZ <--
 
         // Validate that all shader files exist
         val missingShaders = shaders.filter { path ->

@@ -80,6 +80,7 @@ import eu.kanade.tachiyomi.ui.player.domain.BrightnessManager
 import eu.kanade.tachiyomi.ui.player.domain.TrackSelect
 import eu.kanade.tachiyomi.ui.player.loader.EpisodeLoader
 import eu.kanade.tachiyomi.ui.player.loader.HosterLoader
+import eu.kanade.tachiyomi.ui.player.settings.AdvancedPlayerPreferences
 import eu.kanade.tachiyomi.ui.player.settings.AudioPreferences
 import eu.kanade.tachiyomi.ui.player.settings.DecoderPreferences
 import eu.kanade.tachiyomi.ui.player.settings.GesturePreferences
@@ -211,6 +212,16 @@ class PlayerViewModel @JvmOverloads constructor(
         it.setOptionString("icc-cache-dir", cachePath)
         it.setOptionString("keep-open", "yes")
         // ANZ -->
+        val mpvConf = Injekt.get<AdvancedPlayerPreferences>().mpvConf().get()
+        val hasShaders = isAnime4KActive(decoderPreferences) || hasCustomGlslShaders(mpvConf)
+        if (hasShaders || !decoderPreferences.gpuNext().get()) {
+            it.setOptionString("gpu-api", "opengl")
+        }
+        if (hasShaders) {
+            it.setOptionString("vo", "gpu")
+            it.setOptionString("gpu-dumb-mode", "no")
+        }
+        setAdrenoSafeFboFormat(it, isInit = true)
         it.setOptionString("volume-max", (audioPreferences.volumeBoostCap().get() + 100).toString())
         // Start the engine at the remembered speed. This must happen here, as a pre-init option,
         // rather than as a property write after initialization: `playbackSpeed` snapshots the
@@ -2876,8 +2887,13 @@ class PlayerViewModel @JvmOverloads constructor(
 
     // ANZ -->
     fun updateDecoder(decoder: Decoder) {
-        _manualDecoder.update { decoder }
-        mpv.setPropertyString("hwdec", decoder.value)
+        val effectiveDecoder = if (decoder == Decoder.HWPlus && isAnime4KActive(decoderPreferences)) {
+            Decoder.HW
+        } else {
+            decoder
+        }
+        _manualDecoder.update { effectiveDecoder }
+        mpv.setPropertyString("hwdec", effectiveDecoder.value)
     }
 
     fun getDecoder() {

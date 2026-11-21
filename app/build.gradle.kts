@@ -62,9 +62,9 @@ android {
     defaultConfig {
         applicationId = "app.anizen"
 
-        versionCode = 727
+        versionCode = 728
         // ANZ -->
-        versionName = "2.5v.2"
+        versionName = "2.6-fix"
         // ANZ <--
 
         manifestPlaceholders["author"] = "@salmanbappi"
@@ -85,9 +85,9 @@ android {
     buildTypes {
         val debug by getting {
             // ANZ -->
-            applicationIdSuffix = ".nova"
+            applicationIdSuffix = ".fix26"
             signingConfig = signingConfigs.getByName("nova")
-            // Keep debug versionName clean so Android App Info displays "2.5v"
+            // Keep debug versionName clean so Android App Info displays "2.6-fix"
             isPseudoLocalesEnabled = false
             // ANZ <--
         }
@@ -257,16 +257,16 @@ android {
             }
             // ANZ -->
             if (buildType.name == "debug") {
-                output?.versionNameOverride = "2.5v"
+                output?.versionNameOverride = "2.6-fix"
             }
             val abiProp = project.findProperty("abiList") as? String
             val singleAbi = abiProp?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() }?.size == 1
             val baseOutput = this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl
             val abiFilter = output?.getFilter(com.android.build.VariantOutput.FilterType.ABI)
             baseOutput?.outputFileName = if (abiFilter.isNullOrBlank() || singleAbi) {
-                "AniZen-2.5v.apk"
+                "AniZen-2.6-fix.apk"
             } else {
-                "AniZen-2.5v-$abiFilter.apk"
+                "AniZen-2.6-fix-$abiFilter.apk"
             }
             // ANZ <--
         }

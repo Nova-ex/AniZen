@@ -1,4 +1,4 @@
-name: Build AniZen 2.5v APK
+name: Build AniZen 2.6-fix APK
 
 on:
   push:
@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   build-apk:
-    name: Build AniZen-2.5v APK (arm64-v8a)
+    name: Build AniZen-2.6-fix APK (arm64-v8a)
     runs-on: ubuntu-latest
 
     steps:
@@ -37,13 +37,30 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Assemble arm64-v8a Debug APK (signed with persistent Nova keystore)
+      - name: Configure Signing Keystore
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          if [ -n "$SIGNING_KEYSTORE_BASE64" ]; then
+            echo "Decoding SIGNING_KEYSTORE_BASE64 into app/anizen-nova.jks"
+            echo "$SIGNING_KEYSTORE_BASE64" | base64 --decode > app/anizen-nova.jks
+            echo "NOVA_KEYSTORE_PASSWORD=$SIGNING_STORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "NOVA_KEY_ALIAS=$SIGNING_KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "NOVA_KEY_PASSWORD=$SIGNING_KEY_PASSWORD" >> "$GITHUB_ENV"
+          else
+            echo "Using repository persistent Nova keystore (app/anizen-nova.jks)"
+          fi
+
+      - name: Assemble arm64-v8a APK (signed)
         run: ./gradlew assembleDebug -PabiList=arm64-v8a --no-daemon
 
-      - name: Prepare and Verify AniZen-2.5v.apk
+      - name: Prepare and Verify AniZen-2.6-fix.apk
         run: |
           set -euo pipefail
-          APK_PATH=$(find app/build/outputs/apk/debug -maxdepth 2 -name 'AniZen-2.5v.apk' | head -n 1)
+          APK_PATH=$(find app/build/outputs/apk/debug -maxdepth 2 -name 'AniZen-2.6-fix.apk' | head -n 1)
           if [ -z "$APK_PATH" ]; then
             APK_PATH=$(find app/build/outputs/apk/debug -maxdepth 2 -name '*arm64-v8a*.apk' | head -n 1)
           fi
@@ -51,14 +68,14 @@ jobs:
             echo "No arm64-v8a debug APK found in app/build/outputs/apk/debug"
             exit 1
           fi
-          echo "Preparing $APK_PATH -> AniZen-2.5v.apk"
-          cp "$APK_PATH" AniZen-2.5v.apk
-          ls -lh AniZen-2.5v.apk
+          echo "Preparing $APK_PATH -> AniZen-2.6-fix.apk"
+          cp "$APK_PATH" AniZen-2.6-fix.apk
+          ls -lh AniZen-2.6-fix.apk
 
           BUILD_TOOLS_DIR=$(ls -d "${ANDROID_SDK_ROOT:-$ANDROID_HOME}"/build-tools/* | sort -V | tail -n 1)
           echo "Using build-tools: $BUILD_TOOLS_DIR"
-          "$BUILD_TOOLS_DIR/apksigner" verify --verbose --print-certs AniZen-2.5v.apk
-          BADGING=$("$BUILD_TOOLS_DIR/aapt2" dump badging AniZen-2.5v.apk)
+          "$BUILD_TOOLS_DIR/apksigner" verify --verbose --print-certs AniZen-2.6-fix.apk
+          BADGING=$("$BUILD_TOOLS_DIR/aapt2" dump badging AniZen-2.6-fix.apk)
           echo "$BADGING" | grep -E "package:|sdkVersion|targetSdkVersion|native-code|application:"
           if echo "$BADGING" | grep -qi "testOnly"; then
             echo "ERROR: APK has android:testOnly set!"
@@ -68,26 +85,41 @@ jobs:
             echo "ERROR: APK is missing arm64-v8a native libraries!"
             exit 1
           fi
+          if ! echo "$BADGING" | grep -q "app.anizen.fix26"; then
+            echo "ERROR: APK package ID is not app.anizen.fix26!"
+            exit 1
+          fi
 
-      - name: Upload AniZen-2.5v Artifact
+      - name: Upload AniZen-2.6-fix Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AniZen-2.5v
-          path: AniZen-2.5v.apk
+          name: AniZen-2.6-fix
+          path: AniZen-2.6-fix.apk
           if-no-files-found: error
 
-      - name: Publish GitHub Release (2.5v)
+      - name: Publish GitHub Release (2.6-fix)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: 2.5v
-          name: AniZen 2.5v
+          tag_name: 2.6-fix
+          name: AniZen 2.6-fix
           body: |
-            Automated signed `arm64-v8a` build of **AniZen 2.5v** (`app.anizen.nova`) with CloudStream (`.cs3`) extension support, MPV header/subtitle passthrough, Arabic tracker normalization, and existing SFTP server support.
-            - Package ID: `app.anizen.nova` (installs cleanly alongside official AniZen)
-            - Signing: Persistent Nova keystore (v1 + v2 + v3) for seamless future updates
+            Automated signed `arm64-v8a` side-by-side build of **AniZen 2.6-fix** (`app.anizen.fix26`, launcher label **AniZen 2.6**) — installs cleanly alongside `AniZen 2.5v` (`app.anizen.nova`) without overwriting it.
+
+            ### What's Fixed in 2.6-fix
+            - **Anime4K WQHD+ (`3088x1440`) Adreno 740 Black/Blue Screen Fix:**
+              - Enforces `vo=gpu`, `gpu-api=opengl`, `hwdec=mediacodec-copy`, `fbo-format=rgba16hf` (with safe fallback), `gpu-dumb-mode=no`, and clean base scalers (`ewa_lanczossharp` / `mitchell` / `correct-downscaling=yes` / `sigmoid-upscaling=yes`) whenever Anime4K or custom GLSL shaders are active.
+              - Fixes all 14 bundled Anime4K `.glsl` shaders for Adreno OpenGL ES: removes `precision mediump float;` (which collapsed FP16 coordinates above 1024px in Depth-to-Space), replaces dynamic `vec4` indexing `[i.y*2+i.x]` with clamped constant channel selects, fixes `Clamp_Highlights` FBO/alpha/underflow bugs, enforces strict `vec4` `max()` types, and guards `//!WHEN` to prevent `>4K` (`5120x2880`) oversized double-stacked intermediate FBOs.
+              - Optimizes **FAST** (single lightweight `S` CNN pass for Galaxy Tab S9 FE+), **BALANCED** (`M -> S`), and **HIGH** (`L -> M`) across Modes `A`, `B`, `C`, `A+`, `B+`, and `C+` for crisp 480p & 720p upscaling to native `1440p`.
+              - Persisted Anime4K preferences now initialize automatically on player launch.
+            - **All 2.5v Features Preserved:** CloudStream (`.cs3`) extension runtime/UI, FTP/FTPS/SFTP Anime Source, and Arabic tracker normalization remain intact.
+
+            ### Build Info
+            - Package ID: `app.anizen.fix26` (side-by-side with `app.anizen.nova`)
+            - App Name: `AniZen 2.6`
+            - Version: `2.6-fix`
             - ABI: `arm64-v8a` (Galaxy S23 Ultra, Galaxy Tab S9 FE+, and all 64-bit ARM devices)
             - Commit: `${{ github.sha }}`
             - Branch: `${{ github.ref_name }}`
-          files: AniZen-2.5v.apk
+          files: AniZen-2.6-fix.apk
           prerelease: false
           make_latest: true

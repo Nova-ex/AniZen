@@ -28,8 +28,7 @@
 //!WIDTH MAIN.w
 //!HEIGHT MAIN.h
 //!COMPONENTS 4
-//!WHEN OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *
-precision mediump float;
+//!WHEN OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > * MAIN.w 1921 < * MAIN.h 1081 < *
 #define go_0(x_off, y_off) (MAIN_texOff(vec2(x_off, y_off)))
 vec4 hook() {
     vec4 result = mat4(6.5515305e-05, 0.09565814, -0.0022499533, 0.14627136, -0.0065872427, 0.1441769, 0.17772098, 0.16298898, 0.03727593, 0.02010636, 0.013131043, 0.07891907, 0.0, 0.0, 0.0, 0.0) * go_0(-1.0, -1.0);
@@ -51,39 +50,38 @@ vec4 hook() {
 //!WIDTH conv2d_tf.w
 //!HEIGHT conv2d_tf.h
 //!COMPONENTS 4
-//!WHEN OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *
-precision mediump float;
+//!WHEN OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > * MAIN.w 1921 < * MAIN.h 1081 < *
 // Optimized: go_0 macro cached
 // Optimized: go_1 macro cached
 vec4 hook() {
     // Optimized C.R.E.L.U. pass texture cache
     vec4 tex_val_m1_0_m1_0 = conv2d_tf_texOff(vec2(-1.0, -1.0));
-    vec4 go_0_m1_0_m1_0 = max(tex_val_m1_0_m1_0, 0.0);
-    vec4 go_1_m1_0_m1_0 = max(-tex_val_m1_0_m1_0, 0.0);
+    vec4 go_0_m1_0_m1_0 = max(tex_val_m1_0_m1_0, vec4(0.0));
+    vec4 go_1_m1_0_m1_0 = max(-tex_val_m1_0_m1_0, vec4(0.0));
     vec4 tex_val_m1_0_0_0 = conv2d_tf_texOff(vec2(-1.0, 0.0));
-    vec4 go_0_m1_0_0_0 = max(tex_val_m1_0_0_0, 0.0);
-    vec4 go_1_m1_0_0_0 = max(-tex_val_m1_0_0_0, 0.0);
+    vec4 go_0_m1_0_0_0 = max(tex_val_m1_0_0_0, vec4(0.0));
+    vec4 go_1_m1_0_0_0 = max(-tex_val_m1_0_0_0, vec4(0.0));
     vec4 tex_val_m1_0_1_0 = conv2d_tf_texOff(vec2(-1.0, 1.0));
-    vec4 go_0_m1_0_1_0 = max(tex_val_m1_0_1_0, 0.0);
-    vec4 go_1_m1_0_1_0 = max(-tex_val_m1_0_1_0, 0.0);
+    vec4 go_0_m1_0_1_0 = max(tex_val_m1_0_1_0, vec4(0.0));
+    vec4 go_1_m1_0_1_0 = max(-tex_val_m1_0_1_0, vec4(0.0));
     vec4 tex_val_0_0_m1_0 = conv2d_tf_texOff(vec2(0.0, -1.0));
-    vec4 go_0_0_0_m1_0 = max(tex_val_0_0_m1_0, 0.0);
-    vec4 go_1_0_0_m1_0 = max(-tex_val_0_0_m1_0, 0.0);
+    vec4 go_0_0_0_m1_0 = max(tex_val_0_0_m1_0, vec4(0.0));
+    vec4 go_1_0_0_m1_0 = max(-tex_val_0_0_m1_0, vec4(0.0));
     vec4 tex_val_0_0_0_0 = conv2d_tf_texOff(vec2(0.0, 0.0));
-    vec4 go_0_0_0_0_0 = max(tex_val_0_0_0_0, 0.0);
-    vec4 go_1_0_0_0_0 = max(-tex_val_0_0_0_0, 0.0);
+    vec4 go_0_0_0_0_0 = max(tex_val_0_0_0_0, vec4(0.0));
+    vec4 go_1_0_0_0_0 = max(-tex_val_0_0_0_0, vec4(0.0));
     vec4 tex_val_0_0_1_0 = conv2d_tf_texOff(vec2(0.0, 1.0));
-    vec4 go_0_0_0_1_0 = max(tex_val_0_0_1_0, 0.0);
-    vec4 go_1_0_0_1_0 = max(-tex_val_0_0_1_0, 0.0);
+    vec4 go_0_0_0_1_0 = max(tex_val_0_0_1_0, vec4(0.0));
+    vec4 go_1_0_0_1_0 = max(-tex_val_0_0_1_0, vec4(0.0));
     vec4 tex_val_1_0_m1_0 = conv2d_tf_texOff(vec2(1.0, -1.0));
-    vec4 go_0_1_0_m1_0 = max(tex_val_1_0_m1_0, 0.0);
-    vec4 go_1_1_0_m1_0 = max(-tex_val_1_0_m1_0, 0.0);
+    vec4 go_0_1_0_m1_0 = max(tex_val_1_0_m1_0, vec4(0.0));
+    vec4 go_1_1_0_m1_0 = max(-tex_val_1_0_m1_0, vec4(0.0));
     vec4 tex_val_1_0_0_0 = conv2d_tf_texOff(vec2(1.0, 0.0));
-    vec4 go_0_1_0_0_0 = max(tex_val_1_0_0_0, 0.0);
-    vec4 go_1_1_0_0_0 = max(-tex_val_1_0_0_0, 0.0);
+    vec4 go_0_1_0_0_0 = max(tex_val_1_0_0_0, vec4(0.0));
+    vec4 go_1_1_0_0_0 = max(-tex_val_1_0_0_0, vec4(0.0));
     vec4 tex_val_1_0_1_0 = conv2d_tf_texOff(vec2(1.0, 1.0));
-    vec4 go_0_1_0_1_0 = max(tex_val_1_0_1_0, 0.0);
-    vec4 go_1_1_0_1_0 = max(-tex_val_1_0_1_0, 0.0);
+    vec4 go_0_1_0_1_0 = max(tex_val_1_0_1_0, vec4(0.0));
+    vec4 go_1_1_0_1_0 = max(-tex_val_1_0_1_0, vec4(0.0));
 
     vec4 result = mat4(-0.103708945, -0.050891697, -0.2067834, -0.033582103, -0.08676132, 0.15528207, -0.10070597, -0.13641205, 0.030959459, 0.12798834, -0.058627255, -0.008511715, 0.023304658, -0.027084433, 0.120355256, -0.023104342) * go_0_m1_0_m1_0;
     result += mat4(0.0550643, -0.26851672, 0.11073926, 0.21989855, 0.012853378, 0.028077757, 0.073306665, -0.04551125, 0.16005373, -0.018154016, -0.12347146, -0.07590073, -0.10193998, 0.084696375, 0.04041413, -0.030883553) * go_0_m1_0_0_0;
@@ -113,39 +111,38 @@ vec4 hook() {
 //!WIDTH conv2d_1_tf.w
 //!HEIGHT conv2d_1_tf.h
 //!COMPONENTS 4
-//!WHEN OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *
-precision mediump float;
+//!WHEN OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > * MAIN.w 1921 < * MAIN.h 1081 < *
 // Optimized: go_0 macro cached
 // Optimized: go_1 macro cached
 vec4 hook() {
     // Optimized C.R.E.L.U. pass texture cache
     vec4 tex_val_m1_0_m1_0 = conv2d_1_tf_texOff(vec2(-1.0, -1.0));
-    vec4 go_0_m1_0_m1_0 = max(tex_val_m1_0_m1_0, 0.0);
-    vec4 go_1_m1_0_m1_0 = max(-tex_val_m1_0_m1_0, 0.0);
+    vec4 go_0_m1_0_m1_0 = max(tex_val_m1_0_m1_0, vec4(0.0));
+    vec4 go_1_m1_0_m1_0 = max(-tex_val_m1_0_m1_0, vec4(0.0));
     vec4 tex_val_m1_0_0_0 = conv2d_1_tf_texOff(vec2(-1.0, 0.0));
-    vec4 go_0_m1_0_0_0 = max(tex_val_m1_0_0_0, 0.0);
-    vec4 go_1_m1_0_0_0 = max(-tex_val_m1_0_0_0, 0.0);
+    vec4 go_0_m1_0_0_0 = max(tex_val_m1_0_0_0, vec4(0.0));
+    vec4 go_1_m1_0_0_0 = max(-tex_val_m1_0_0_0, vec4(0.0));
     vec4 tex_val_m1_0_1_0 = conv2d_1_tf_texOff(vec2(-1.0, 1.0));
-    vec4 go_0_m1_0_1_0 = max(tex_val_m1_0_1_0, 0.0);
-    vec4 go_1_m1_0_1_0 = max(-tex_val_m1_0_1_0, 0.0);
+    vec4 go_0_m1_0_1_0 = max(tex_val_m1_0_1_0, vec4(0.0));
+    vec4 go_1_m1_0_1_0 = max(-tex_val_m1_0_1_0, vec4(0.0));
     vec4 tex_val_0_0_m1_0 = conv2d_1_tf_texOff(vec2(0.0, -1.0));
-    vec4 go_0_0_0_m1_0 = max(tex_val_0_0_m1_0, 0.0);
-    vec4 go_1_0_0_m1_0 = max(-tex_val_0_0_m1_0, 0.0);
+    vec4 go_0_0_0_m1_0 = max(tex_val_0_0_m1_0, vec4(0.0));
+    vec4 go_1_0_0_m1_0 = max(-tex_val_0_0_m1_0, vec4(0.0));
     vec4 tex_val_0_0_0_0 = conv2d_1_tf_texOff(vec2(0.0, 0.0));
-    vec4 go_0_0_0_0_0 = max(tex_val_0_0_0_0, 0.0);
-    vec4 go_1_0_0_0_0 = max(-tex_val_0_0_0_0, 0.0);
+    vec4 go_0_0_0_0_0 = max(tex_val_0_0_0_0, vec4(0.0));
+    vec4 go_1_0_0_0_0 = max(-tex_val_0_0_0_0, vec4(0.0));
     vec4 tex_val_0_0_1_0 = conv2d_1_tf_texOff(vec2(0.0, 1.0));
-    vec4 go_0_0_0_1_0 = max(tex_val_0_0_1_0, 0.0);
-    vec4 go_1_0_0_1_0 = max(-tex_val_0_0_1_0, 0.0);
+    vec4 go_0_0_0_1_0 = max(tex_val_0_0_1_0, vec4(0.0));
+    vec4 go_1_0_0_1_0 = max(-tex_val_0_0_1_0, vec4(0.0));
     vec4 tex_val_1_0_m1_0 = conv2d_1_tf_texOff(vec2(1.0, -1.0));
-    vec4 go_0_1_0_m1_0 = max(tex_val_1_0_m1_0, 0.0);
-    vec4 go_1_1_0_m1_0 = max(-tex_val_1_0_m1_0, 0.0);
+    vec4 go_0_1_0_m1_0 = max(tex_val_1_0_m1_0, vec4(0.0));
+    vec4 go_1_1_0_m1_0 = max(-tex_val_1_0_m1_0, vec4(0.0));
     vec4 tex_val_1_0_0_0 = conv2d_1_tf_texOff(vec2(1.0, 0.0));
-    vec4 go_0_1_0_0_0 = max(tex_val_1_0_0_0, 0.0);
-    vec4 go_1_1_0_0_0 = max(-tex_val_1_0_0_0, 0.0);
+    vec4 go_0_1_0_0_0 = max(tex_val_1_0_0_0, vec4(0.0));
+    vec4 go_1_1_0_0_0 = max(-tex_val_1_0_0_0, vec4(0.0));
     vec4 tex_val_1_0_1_0 = conv2d_1_tf_texOff(vec2(1.0, 1.0));
-    vec4 go_0_1_0_1_0 = max(tex_val_1_0_1_0, 0.0);
-    vec4 go_1_1_0_1_0 = max(-tex_val_1_0_1_0, 0.0);
+    vec4 go_0_1_0_1_0 = max(tex_val_1_0_1_0, vec4(0.0));
+    vec4 go_1_1_0_1_0 = max(-tex_val_1_0_1_0, vec4(0.0));
 
     vec4 result = mat4(-0.0714004, -0.0545495, -0.050848898, 0.04724593, 0.2214181, 0.26353878, 0.07314053, -0.18771721, 0.06282607, -0.03720548, 0.020577375, -0.08951135, 0.40820515, 0.012179098, 0.52947706, -0.48448065) * go_0_m1_0_m1_0;
     result += mat4(0.10311368, -0.10970221, 0.07008208, -0.07143153, 0.073753305, 0.03786335, -0.4312538, -0.17680745, -0.15527713, -0.06711554, -0.21828765, 0.27252844, -0.0025433605, 0.31595528, -0.06065309, 0.059542265) * go_0_m1_0_0_0;
@@ -175,39 +172,38 @@ vec4 hook() {
 //!WIDTH conv2d_2_tf.w
 //!HEIGHT conv2d_2_tf.h
 //!COMPONENTS 4
-//!WHEN OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *
-precision mediump float;
+//!WHEN OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > * MAIN.w 1921 < * MAIN.h 1081 < *
 // Optimized: go_0 macro cached
 // Optimized: go_1 macro cached
 vec4 hook() {
     // Optimized C.R.E.L.U. pass texture cache
     vec4 tex_val_m1_0_m1_0 = conv2d_2_tf_texOff(vec2(-1.0, -1.0));
-    vec4 go_0_m1_0_m1_0 = max(tex_val_m1_0_m1_0, 0.0);
-    vec4 go_1_m1_0_m1_0 = max(-tex_val_m1_0_m1_0, 0.0);
+    vec4 go_0_m1_0_m1_0 = max(tex_val_m1_0_m1_0, vec4(0.0));
+    vec4 go_1_m1_0_m1_0 = max(-tex_val_m1_0_m1_0, vec4(0.0));
     vec4 tex_val_m1_0_0_0 = conv2d_2_tf_texOff(vec2(-1.0, 0.0));
-    vec4 go_0_m1_0_0_0 = max(tex_val_m1_0_0_0, 0.0);
-    vec4 go_1_m1_0_0_0 = max(-tex_val_m1_0_0_0, 0.0);
+    vec4 go_0_m1_0_0_0 = max(tex_val_m1_0_0_0, vec4(0.0));
+    vec4 go_1_m1_0_0_0 = max(-tex_val_m1_0_0_0, vec4(0.0));
     vec4 tex_val_m1_0_1_0 = conv2d_2_tf_texOff(vec2(-1.0, 1.0));
-    vec4 go_0_m1_0_1_0 = max(tex_val_m1_0_1_0, 0.0);
-    vec4 go_1_m1_0_1_0 = max(-tex_val_m1_0_1_0, 0.0);
+    vec4 go_0_m1_0_1_0 = max(tex_val_m1_0_1_0, vec4(0.0));
+    vec4 go_1_m1_0_1_0 = max(-tex_val_m1_0_1_0, vec4(0.0));
     vec4 tex_val_0_0_m1_0 = conv2d_2_tf_texOff(vec2(0.0, -1.0));
-    vec4 go_0_0_0_m1_0 = max(tex_val_0_0_m1_0, 0.0);
-    vec4 go_1_0_0_m1_0 = max(-tex_val_0_0_m1_0, 0.0);
+    vec4 go_0_0_0_m1_0 = max(tex_val_0_0_m1_0, vec4(0.0));
+    vec4 go_1_0_0_m1_0 = max(-tex_val_0_0_m1_0, vec4(0.0));
     vec4 tex_val_0_0_0_0 = conv2d_2_tf_texOff(vec2(0.0, 0.0));
-    vec4 go_0_0_0_0_0 = max(tex_val_0_0_0_0, 0.0);
-    vec4 go_1_0_0_0_0 = max(-tex_val_0_0_0_0, 0.0);
+    vec4 go_0_0_0_0_0 = max(tex_val_0_0_0_0, vec4(0.0));
+    vec4 go_1_0_0_0_0 = max(-tex_val_0_0_0_0, vec4(0.0));
     vec4 tex_val_0_0_1_0 = conv2d_2_tf_texOff(vec2(0.0, 1.0));
-    vec4 go_0_0_0_1_0 = max(tex_val_0_0_1_0, 0.0);
-    vec4 go_1_0_0_1_0 = max(-tex_val_0_0_1_0, 0.0);
+    vec4 go_0_0_0_1_0 = max(tex_val_0_0_1_0, vec4(0.0));
+    vec4 go_1_0_0_1_0 = max(-tex_val_0_0_1_0, vec4(0.0));
     vec4 tex_val_1_0_m1_0 = conv2d_2_tf_texOff(vec2(1.0, -1.0));
-    vec4 go_0_1_0_m1_0 = max(tex_val_1_0_m1_0, 0.0);
-    vec4 go_1_1_0_m1_0 = max(-tex_val_1_0_m1_0, 0.0);
+    vec4 go_0_1_0_m1_0 = max(tex_val_1_0_m1_0, vec4(0.0));
+    vec4 go_1_1_0_m1_0 = max(-tex_val_1_0_m1_0, vec4(0.0));
     vec4 tex_val_1_0_0_0 = conv2d_2_tf_texOff(vec2(1.0, 0.0));
-    vec4 go_0_1_0_0_0 = max(tex_val_1_0_0_0, 0.0);
-    vec4 go_1_1_0_0_0 = max(-tex_val_1_0_0_0, 0.0);
+    vec4 go_0_1_0_0_0 = max(tex_val_1_0_0_0, vec4(0.0));
+    vec4 go_1_1_0_0_0 = max(-tex_val_1_0_0_0, vec4(0.0));
     vec4 tex_val_1_0_1_0 = conv2d_2_tf_texOff(vec2(1.0, 1.0));
-    vec4 go_0_1_0_1_0 = max(tex_val_1_0_1_0, 0.0);
-    vec4 go_1_1_0_1_0 = max(-tex_val_1_0_1_0, 0.0);
+    vec4 go_0_1_0_1_0 = max(tex_val_1_0_1_0, vec4(0.0));
+    vec4 go_1_1_0_1_0 = max(-tex_val_1_0_1_0, vec4(0.0));
 
     vec4 result = mat4(-0.04508749, 0.00222134, 0.013338363, -0.0067310617, 0.099346675, 0.05804196, 0.018694466, -0.008126048, 0.007771997, -0.0072556734, -0.008293339, 0.001518462, -0.06296499, -0.064195156, 0.0727399, 0.044078834) * go_0_m1_0_m1_0;
     result += mat4(0.20800652, -0.016071903, -0.08095607, -0.03472411, -0.20690396, 0.061331827, -0.10627648, 0.12838624, 0.036534917, -0.006113497, 0.029266752, -0.002263159, 0.2937966, -0.05544609, 0.14546311, -0.01290958) * go_0_m1_0_0_0;
@@ -237,14 +233,11 @@ vec4 hook() {
 //!SAVE MAIN
 //!WIDTH conv2d_last_tf.w 2 *
 //!HEIGHT conv2d_last_tf.h 2 *
-//!WHEN OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *
-precision mediump float;
+//!WHEN OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > * MAIN.w 1921 < * MAIN.h 1081 < *
 vec4 hook() {
     vec2 f0 = fract(conv2d_last_tf_pos * conv2d_last_tf_size);
-    ivec2 i0 = ivec2(f0 * vec2(2.0));
-    float c0 = conv2d_last_tf_tex((vec2(0.5) - f0) * conv2d_last_tf_pt + conv2d_last_tf_pos)[i0.y * 2 + i0.x];
-    float c1 = c0;
-    float c2 = c1;
-    float c3 = c2;
-    return vec4(c0, c1, c2, c3) + MAIN_tex(MAIN_pos);
+    ivec2 i0 = clamp(ivec2(f0 * vec2(2.0)), ivec2(0), ivec2(1));
+    vec4 s0 = conv2d_last_tf_tex((vec2(0.5) - f0) * conv2d_last_tf_pt + conv2d_last_tf_pos);
+    float c0 = (i0.y == 0) ? ((i0.x == 0) ? s0.x : s0.y) : ((i0.x == 0) ? s0.z : s0.w);
+    return vec4(c0, c0, c0, 0.0) + MAIN_tex(MAIN_pos);
 }
