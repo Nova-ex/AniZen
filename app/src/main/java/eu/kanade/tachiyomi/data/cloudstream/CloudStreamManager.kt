@@ -10,6 +10,7 @@ import com.lagradost.cloudstream3.plugins.RepositoryManager
 import com.lagradost.cloudstream3.plugins.SitePlugin
 import com.lagradost.cloudstream3.ui.settings.extensions.RepositoryData
 import com.lagradost.cloudstream3.utils.DataStore
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -27,7 +28,11 @@ class CloudStreamManager(
     private val context: Context,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val initialized = AtomicBoolean(false)
+    private val initStarted = AtomicBoolean(false)
+    private val initCompleted = CompletableDeferred<Unit>()
+
+    private val _isInitialized = MutableStateFlow(false)
+    val isInitialized: StateFlow<Boolean> = _isInitialized.asStateFlow()
 
     private val _sourcesFlow = MutableStateFlow<List<CloudStreamAnimeSource>>(emptyList())
     val sourcesFlow: StateFlow<List<CloudStreamAnimeSource>> = _sourcesFlow.asStateFlow()
@@ -38,6 +43,8 @@ class CloudStreamManager(
     private val _installedPluginsFlow = MutableStateFlow<List<PluginManager.PluginData>>(emptyList())
     val installedPluginsFlow: StateFlow<List<PluginManager.PluginData>> = _installedPluginsFlow.asStateFlow()
 
+    private val sourceByIdCache = ConcurrentHashMap<Long, CloudStreamAnimeSource>()
+    private val legacyToCanonicalIdMap = ConcurrentHashMap<Long, Long>()
     private val sourceIconCache = ConcurrentHashMap<Long, String>()
     private val sourcePluginNameCache = ConcurrentHashMap<Long, String>()
 
@@ -62,17 +69,30 @@ class CloudStreamManager(
     }
 
     suspend fun loadInstalledPluginsOnStartup() {
-        if (!initialized.compareAndSet(false, true)) return
-        withIOContext {
-            initRuntime()
-            _reposFlow.value = RepositoryManager.getRepositories().toList()
-            runCatching {
-                PluginManager.loadAllPlugins(context)
-            }.onFailure {
-                logcat(LogPriority.ERROR, it) { "Failed loading CloudStream .cs3 plugins on startup" }
-            }
-            refreshStateFromRuntime()
+        if (!initStarted.compareAndSet(false, true)) {
+            initCompleted.await()
+            return
         }
+        try {
+            withIOContext {
+                initRuntime()
+                _reposFlow.value = RepositoryManager.getRepositories().toList()
+                runCatching {
+                    PluginManager.loadAllPlugins(context)
+                }.onFailure {
+                    logcat(LogPriority.ERROR, it) { "Failed loading CloudStream .cs3 plugins on startup" }
+                }
+                refreshStateFromRuntime()
+            }
+        } finally {
+            _isInitialized.value = true
+            initCompleted.complete(Unit)
+        }
+    }
+
+    suspend fun awaitInitialized() {
+        if (_isInitialized.value) return
+        loadInstalledPluginsOnStartup()
     }
 
     fun refreshStateFromRuntime() {
@@ -89,23 +109,51 @@ class CloudStreamManager(
             .distinctBy { "${it.name}|${it.lang}|${it.sourcePlugin}" }
             .map { provider ->
                 val meta = provider.sourcePlugin?.let { pluginByPath[it] }
+                val canonicalPluginPackageName = CloudStreamAnimeSource.resolveCanonicalPluginPackageName(
+                    provider = provider,
+                    pluginInternalName = meta?.internalName,
+                )
                 val source = CloudStreamAnimeSource(
                     provider = provider,
                     iconUrl = meta?.iconUrl,
                     pluginInternalName = meta?.internalName,
+                    pluginPackageName = canonicalPluginPackageName,
+                    pluginLanguage = meta?.language,
                 )
                 meta?.iconUrl?.takeIf { it.isNotBlank() }?.let { icon ->
                     sourceIconCache[source.id] = icon
+                    sourceIconCache[source.legacyId] = icon
                 }
                 meta?.name?.takeIf { it.isNotBlank() }?.let { pluginName ->
                     sourcePluginNameCache[source.id] = pluginName
+                    sourcePluginNameCache[source.legacyId] = pluginName
                 }
                 source
             }
             .distinctBy { it.id }
 
+        val newById = ConcurrentHashMap<Long, CloudStreamAnimeSource>()
+        val newLegacyMap = ConcurrentHashMap<Long, Long>()
+        mappedSources.forEach { source ->
+            newById[source.id] = source
+        }
+        mappedSources.forEach { source ->
+            if (source.legacyId != source.id && !newById.containsKey(source.legacyId)) {
+                newById[source.legacyId] = source
+                newLegacyMap[source.legacyId] = source.id
+            }
+        }
+        sourceByIdCache.clear()
+        sourceByIdCache.putAll(newById)
+        legacyToCanonicalIdMap.clear()
+        legacyToCanonicalIdMap.putAll(newLegacyMap)
+
         _sourcesFlow.value = mappedSources
     }
+
+    fun getSourceById(sourceId: Long): CloudStreamAnimeSource? = sourceByIdCache[sourceId]
+
+    fun resolveCanonicalSourceId(sourceId: Long): Long = legacyToCanonicalIdMap[sourceId] ?: sourceId
 
     suspend fun addRepository(rawUrl: String): Result<RepositoryData> = withIOContext {
         runCatching {

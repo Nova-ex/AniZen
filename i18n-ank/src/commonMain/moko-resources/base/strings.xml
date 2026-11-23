@@ -335,4 +335,28 @@
     <string name="cloudstream_filter_installed">Installed</string>
     <string name="cloudstream_filter_updates">Updates</string>
     <string name="cloudstream_badge_source">CloudStream</string>
+
+    <!-- Online Subtitles (OpenSubtitles) & External Subtitles -->
+    <string name="player_sheets_online_subtitles">Online subtitles (OpenSubtitles)</string>
+    <string name="player_sheets_subtitles_tab_tracks">Tracks</string>
+    <string name="player_sheets_subtitles_tab_online">OpenSubtitles</string>
+    <string name="player_online_subtitles_search_hint">Search title…</string>
+    <string name="player_online_subtitles_episode_hint">Ep</string>
+    <string name="player_online_subtitles_season_hint">S</string>
+    <string name="player_online_subtitles_search">Search</string>
+    <string name="player_online_subtitles_lang_ar">Arabic (ar)</string>
+    <string name="player_online_subtitles_lang_en">English (en)</string>
+    <string name="player_online_subtitles_lang_all">All</string>
+    <string name="player_online_subtitles_empty">No subtitles found. Try editing the title, season, or episode number.</string>
+    <string name="player_online_subtitles_loaded">Loaded subtitle: %1$s</string>
+    <string name="player_online_subtitles_download_failed">Failed to download subtitle: %1$s</string>
+    <string name="player_online_subtitles_search_failed">Subtitle search failed: %1$s</string>
+    <string name="player_ext_subtitle_loaded">Loaded subtitle: %1$s</string>
+    <string name="player_ext_subtitle_failed">Failed to load external subtitle</string>
+    <string name="pref_category_opensubtitles">OpenSubtitles</string>
+    <string name="pref_opensubtitles_info">Online subtitle search works out of the box without an API key. Optionally add an OpenSubtitles.com API key and account credentials for higher daily download limits.</string>
+    <string name="pref_opensubtitles_api_key">OpenSubtitles.com API key (optional)</string>
+    <string name="pref_opensubtitles_api_key_summary">Optional API key from opensubtitles.com/consumers</string>
+    <string name="pref_opensubtitles_username">OpenSubtitles username (optional)</string>
+    <string name="pref_opensubtitles_password">OpenSubtitles password (optional)</string>
 </resources>

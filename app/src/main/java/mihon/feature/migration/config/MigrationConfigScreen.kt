@@ -56,9 +56,11 @@ import eu.kanade.presentation.components.AppBar
 import eu.kanade.presentation.components.AppBarActions
 import eu.kanade.presentation.components.SOURCE_SEARCH_BOX_HEIGHT
 import eu.kanade.presentation.util.Screen
+import eu.kanade.tachiyomi.data.cloudstream.isCloudStreamSourceId
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.system.LocaleHelper.getDisplayName
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import mihon.feature.migration.list.MigrationListScreen
 import sh.calvin.reorderable.ReorderableCollectionItemScope
@@ -66,6 +68,7 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ReorderableLazyListState
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import tachiyomi.core.common.util.lang.launchIO
+import tachiyomi.domain.remoteserver.model.isRemoteServerSourceId
 import tachiyomi.domain.source.model.Source
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
@@ -362,6 +365,9 @@ class MigrationConfigScreen(private val animeIds: Collection<Long>) : Screen() {
     private class ScreenModel(
         val sourcePreferences: SourcePreferences = Injekt.get(),
         private val sourceManager: SourceManager = Injekt.get(),
+        // ANZ -->
+        private val cloudStreamManager: eu.kanade.tachiyomi.data.cloudstream.CloudStreamManager = Injekt.get(),
+        // ANZ <--
     ) : StateScreenModel<ScreenModel.State>(State()) {
 
         private val pinnedSources by lazy { sourcePreferences.pinnedSources().get().mapNotNull { it.toLongOrNull() } }
@@ -376,6 +382,12 @@ class MigrationConfigScreen(private val animeIds: Collection<Long>) : Screen() {
 
         init {
             screenModelScope.launchIO {
+                // ANZ -->
+                kotlinx.coroutines.withTimeoutOrNull(10_000L) {
+                    cloudStreamManager.awaitInitialized()
+                    sourceManager.isInitialized.first { it }
+                }
+                // ANZ <--
                 initSources()
                 mutableState.update { it.copy(isLoading = false) }
             }
@@ -399,7 +411,13 @@ class MigrationConfigScreen(private val animeIds: Collection<Long>) : Screen() {
                 .getVisibleCatalogueSources()
                 .asSequence()
                 .filterIsInstance<HttpSource>()
-                .filter { it.lang in languages }
+                // ANZ -->
+                .filter {
+                    it.lang in languages ||
+                        it.id.isCloudStreamSourceId() ||
+                        it.id.isRemoteServerSourceId()
+                }
+                // ANZ <--
                 .sortedWith(compareBy { includedSources[it.id] ?: Int.MAX_VALUE })
                 .map {
                     val source = Source(

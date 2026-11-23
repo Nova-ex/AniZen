@@ -1,6 +1,7 @@
 package eu.kanade.tachiyomi.source
 
 import android.content.Context
+import eu.kanade.tachiyomi.data.cloudstream.isCloudStreamSourceId
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.remoteserver.RemoteAnimeSource
 import eu.kanade.tachiyomi.data.remoteserver.RemoteMetadataResolver
@@ -71,6 +72,11 @@ class AndroidSourceManager(
         .map { it.first.values.filterIsInstance<CatalogueSource>() }
 
     init {
+        // ANZ -->
+        scope.launch {
+            cloudStreamManager.loadInstalledPluginsOnStartup()
+        }
+        // ANZ <--
         scope.launch {
             combine(
                 extensionManager.installedExtensionsFlow,
@@ -78,18 +84,20 @@ class AndroidSourceManager(
                 // ANZ -->
                 getRemoteServers.subscribeAll(),
                 cloudStreamManager.sourcesFlow,
+                cloudStreamManager.isInitialized,
                 // ANZ <--
-            ) { extensions, isExtensionManagerInitialized, remoteServers, cloudStreamSources ->
+            ) { extensions, isExtensionManagerInitialized, remoteServers, cloudStreamSources, isCloudStreamInitialized ->
                 // ANZ -->
                 SourceInputs(
                     extensions = extensions,
                     isExtensionManagerInitialized = isExtensionManagerInitialized,
                     remoteServers = remoteServers,
                     cloudStreamSources = cloudStreamSources,
+                    isCloudStreamInitialized = isCloudStreamInitialized,
                 )
                 // ANZ <--
-            }.collectLatest { (extensions, isExtensionManagerInitialized, remoteServers, cloudStreamSources) ->
-                if (!isExtensionManagerInitialized) return@collectLatest
+            }.collectLatest { (extensions, isExtensionManagerInitialized, remoteServers, cloudStreamSources, isCloudStreamInitialized) ->
+                if (!isExtensionManagerInitialized || !isCloudStreamInitialized) return@collectLatest
 
                 val previousMap = sourcesMapFlow.value
                 val mutableMap = ConcurrentHashMap<Long, Source>(
@@ -146,11 +154,23 @@ class AndroidSourceManager(
     }
 
     override fun get(sourceKey: Long): Source? {
-        return sourcesMapFlow.value[sourceKey]
+        // ANZ -->
+        sourcesMapFlow.value[sourceKey]?.let { return it }
+        if (sourceKey.isCloudStreamSourceId()) {
+            resolveCloudStreamSource(sourceKey)?.let { return it }
+        }
+        return null
+        // ANZ <--
     }
 
     override fun getOrStub(sourceKey: Long): Source {
-        return sourcesMapFlow.value[sourceKey] ?: stubSourcesMap.getOrPut(sourceKey) {
+        // ANZ -->
+        sourcesMapFlow.value[sourceKey]?.let { return it }
+        if (sourceKey.isCloudStreamSourceId()) {
+            resolveCloudStreamSource(sourceKey)?.let { return it }
+        }
+        // ANZ <--
+        return stubSourcesMap.getOrPut(sourceKey) {
             // Return empty stub immediately to avoid UI thread lag
             scope.launch {
                 createStubSource(sourceKey)
@@ -158,6 +178,24 @@ class AndroidSourceManager(
             StubSource(id = sourceKey, lang = "", name = "")
         }
     }
+
+    // ANZ -->
+    private fun resolveCloudStreamSource(sourceKey: Long): Source? {
+        cloudStreamManager.getSourceById(sourceKey)?.let { return it }
+        if (!cloudStreamManager.isInitialized.value &&
+            android.os.Looper.myLooper() != android.os.Looper.getMainLooper()
+        ) {
+            kotlinx.coroutines.runBlocking {
+                kotlinx.coroutines.withTimeoutOrNull(CLOUDSTREAM_WAIT_TIMEOUT_MS) {
+                    cloudStreamManager.awaitInitialized()
+                }
+            }
+            sourcesMapFlow.value[sourceKey]?.let { return it }
+            return cloudStreamManager.getSourceById(sourceKey)
+        }
+        return null
+    }
+    // ANZ <--
 
     override fun getOnlineSources(): List<HttpSource> {
         return sourcesMapFlow.value.values.filterIsInstance<HttpSource>()
@@ -226,6 +264,11 @@ class AndroidSourceManager(
         val isExtensionManagerInitialized: Boolean,
         val remoteServers: List<tachiyomi.domain.remoteserver.model.RemoteServer>,
         val cloudStreamSources: List<eu.kanade.tachiyomi.data.cloudstream.CloudStreamAnimeSource>,
+        val isCloudStreamInitialized: Boolean,
     )
+
+    companion object {
+        private const val CLOUDSTREAM_WAIT_TIMEOUT_MS = 10_000L
+    }
     // ANZ <--
 }

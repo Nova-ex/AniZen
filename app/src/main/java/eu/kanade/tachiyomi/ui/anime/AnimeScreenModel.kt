@@ -1996,12 +1996,18 @@ class AnimeScreenModel(
 
     private fun observeMergedAnime() {
         screenModelScope.launchIO {
-            getMergedAnimeById.subscribe(animeId)
-                .onEach { mergedAnime ->
-                    val sources = mergedAnime.map { sourceManager.getOrStub(it.source) }
+            // ANZ -->
+            combine(
+                getMergedAnimeById.subscribe(animeId),
+                sourceManager.catalogueSources,
+            ) { mergedAnime, _ ->
+                mergedAnime.map { sourceManager.getOrStub(it.source) }
+            }
+                .onEach { sources ->
                     updateSuccessState { it.copySuccess(mergedSources = sources.toImmutableList()) }
                 }
                 .launchIn(screenModelScope)
+            // ANZ <--
         }
     }
 

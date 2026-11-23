@@ -59,6 +59,13 @@ class SubtitlePreferences(
     fun subtitlesDelay() = preferenceStore.getInt("pref_subtitles_delay", 0)
     fun subtitlesSpeed() = preferenceStore.getFloat("pref_subtitles_speed", 1f)
     fun subtitlesSecondaryDelay() = preferenceStore.getInt("pref_subtitles_secondary_delay", 0)
+
+    // ANZ -->
+    fun openSubtitlesApiKey() = preferenceStore.getString("pref_opensubtitles_api_key", "")
+    fun openSubtitlesUsername() = preferenceStore.getString("pref_opensubtitles_username", "")
+    fun openSubtitlesPassword() = preferenceStore.getString("pref_opensubtitles_password", "")
+    fun openSubtitlesPreferredLang() = preferenceStore.getString("pref_opensubtitles_preferred_lang", "ar")
+    // ANZ <--
 }
 
 enum class SubtitleJustification(

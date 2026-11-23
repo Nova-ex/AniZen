@@ -32,7 +32,6 @@ import eu.kanade.tachiyomi.ui.player.settings.DecoderPreferences
 import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
 import eu.kanade.tachiyomi.ui.player.settings.SubtitleAssOverride
 import eu.kanade.tachiyomi.ui.player.settings.SubtitlePreferences
-import eu.kanade.tachiyomi.ui.player.utils.Anime4KManager
 import `is`.xyz.mpv.BaseMPVView
 import `is`.xyz.mpv.KeyMapping
 import `is`.xyz.mpv.MPV
@@ -49,7 +48,6 @@ class AniyomiMPVView(context: Context, attributes: AttributeSet?) : BaseMPVView(
     private val audioPreferences: AudioPreferences by injectLazy()
     private val advancedPreferences: AdvancedPlayerPreferences by injectLazy()
     private val networkPreferences: NetworkPreferences by injectLazy()
-    private val anime4kManager: Anime4KManager by injectLazy()
 
     var isExiting = false
 
@@ -94,43 +92,24 @@ class AniyomiMPVView(context: Context, attributes: AttributeSet?) : BaseMPVView(
 
     fun init(mpvInst: MPV) {
         this.mpv = mpvInst
-        val mpvConfText = advancedPreferences.mpvConf().get()
-        val isAnime4K = isAnime4KActive(decoderPreferences)
-        val hasCustomShaders = hasCustomGlslShaders(mpvConfText)
-        val hasActiveShaders = isAnime4K || hasCustomShaders
-
-        // Enforce vo=gpu + gpu-api=opengl (never gpu-next) whenever Anime4K or custom shaders are active
-        val useGpuNext = decoderPreferences.gpuNext().get() && !hasActiveShaders
-        if (hasActiveShaders && decoderPreferences.gpuNext().get()) {
-            decoderPreferences.gpuNext().set(false)
-        }
-        setVo(if (useGpuNext) "gpu-next" else "gpu")
-        if (!useGpuNext) {
-            setSafeOptionString("gpu-api", "opengl")
-        }
-        setAdrenoSafeFboFormat(mpv, isInit = true, mpvOptionNames = mpvOptionNames)
-
+        setVo(if (decoderPreferences.gpuNext().get()) "gpu-next" else "gpu")
         mpv?.setPropertyBoolean("pause", true)
-        if (!hasActiveShaders) {
-            setSafeOptionString("profile", "fast")
-        }
-
+        setSafeOptionString("profile", "fast")
         val isSmoothMotion = decoderPreferences.smoothMotion().get()
         val defaultHwdec = if (decoderPreferences.tryHWDecoding().get()) {
             val fpsLimit = decoderPreferences.interpolationFPSLimit().get()
-            if (hasActiveShaders || (isSmoothMotion && fpsLimit > 0)) "mediacodec-copy" else "mediacodec" // ANZ
+            if (isSmoothMotion && fpsLimit > 0) "mediacodec-copy" else "mediacodec" // ANZ
         } else {
             "no"
         }
         mpv?.setOptionString("hwdec", defaultHwdec)
 
-        applyAnime4KScalers(
-            mpv = mpv,
-            active = hasActiveShaders,
-            prefs = decoderPreferences,
-            isInit = true,
-            mpvOptionNames = mpvOptionNames,
-        )
+        val isHighQuality = decoderPreferences.highQualityScaling().get()
+        val scaler = if (isHighQuality) "spline36" else "bilinear"
+        setSafeOptionString("scale", scaler)
+        setSafeOptionString("cscale", scaler)
+        setSafeOptionString("dscale", scaler)
+        setSafeOptionString("dither", if (isHighQuality) "fruit" else "no")
 
         // ANZ -->
         if (isSmoothMotion) {
@@ -147,7 +126,7 @@ class AniyomiMPVView(context: Context, attributes: AttributeSet?) : BaseMPVView(
             mpv?.setOptionString("video-sync-max-audio-change", "0.125")
             mpv?.setOptionString("video-sync-max-video-change", "1")
             mpv?.setOptionString("interpolation", "no")
-            mpv?.setOptionString("gpu-dumb-mode", if (hasActiveShaders) "no" else "auto")
+            mpv?.setOptionString("gpu-dumb-mode", "auto")
         }
         // ANZ <--
 
@@ -184,18 +163,6 @@ class AniyomiMPVView(context: Context, attributes: AttributeSet?) : BaseMPVView(
 
         // ANZ -->
         mpv?.setPropertyDouble("speed", playerPreferences.playerSpeed().get().toDouble())
-        // Apply persisted Anime4K shader chain on startup
-        if (isAnime4K) {
-            applyAnime4K(
-                mpv = mpv,
-                prefs = decoderPreferences,
-                manager = anime4kManager,
-                isInit = true,
-                mpvView = this,
-                mpvOptionNames = mpvOptionNames,
-                hasCustomShaders = hasCustomShaders,
-            )
-        }
         // ANZ <--
         // workaround for <https://github.com/mpv-player/mpv/issues/14651>
         setSafeOptionString("vd-lavc-film-grain", "cpu")
@@ -229,10 +196,8 @@ class AniyomiMPVView(context: Context, attributes: AttributeSet?) : BaseMPVView(
         // ANZ -->
         if (decoderPreferences.smoothMotion().get()) {
             val fpsLimit = decoderPreferences.interpolationFPSLimit().get()
-            val hasActiveShaders = isAnime4KActive(decoderPreferences) ||
-                hasCustomGlslShaders(advancedPreferences.mpvConf().get())
             if (decoderPreferences.tryHWDecoding().get()) {
-                val hwdecMode = if (hasActiveShaders || fpsLimit > 0) "mediacodec-copy" else "mediacodec"
+                val hwdecMode = if (fpsLimit > 0) "mediacodec-copy" else "mediacodec"
                 mpv?.setPropertyString("hwdec", hwdecMode)
             }
             mpv?.setPropertyString("interpolation-threshold", "-1")

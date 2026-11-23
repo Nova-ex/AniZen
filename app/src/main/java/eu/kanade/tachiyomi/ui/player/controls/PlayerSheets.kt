@@ -136,14 +136,25 @@ fun PlayerSheets(
                 if (it == null) return@rememberLauncherForActivityResult
                 onAddSubtitle(it)
             }
+            // ANZ -->
+            val onlineSubtitleState by viewModel.onlineSubtitleState.composeCollectAsState()
             SubtitlesSheet(
                 tracks = subtitles.toImmutableList(),
                 onSelect = onSelectSubtitle,
                 onAddSubtitle = { subtitlesPicker.launch(arrayOf("*/*")) },
                 onOpenSubtitleSettings = { onOpenPanel(Panels.SubtitleSettings) },
                 onOpenSubtitleDelay = { onOpenPanel(Panels.SubtitleDelay) },
+                onlineSubtitleState = onlineSubtitleState,
+                onPrepareOnlineSearch = viewModel::prepareOnlineSubtitleSearch,
+                onOnlineQueryChange = viewModel::updateOnlineSubtitleQuery,
+                onOnlineSeasonChange = viewModel::updateOnlineSubtitleSeason,
+                onOnlineEpisodeChange = viewModel::updateOnlineSubtitleEpisode,
+                onOnlineLanguageSelect = viewModel::selectOnlineSubtitleLanguage,
+                onOnlineSearch = viewModel::searchOnlineSubtitles,
+                onDownloadOnlineSubtitle = viewModel::downloadAndApplyOnlineSubtitle,
                 onDismissRequest = onDismissRequest,
             )
+            // ANZ <--
         }
 
         Sheets.AudioTracks -> {

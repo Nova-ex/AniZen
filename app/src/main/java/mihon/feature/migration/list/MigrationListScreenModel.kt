@@ -22,6 +22,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -55,6 +56,9 @@ class MigrationListScreenModel(
     private val syncEpisodesWithSource: SyncEpisodesWithSource = Injekt.get(),
     private val getEpisodesByAnimeId: GetEpisodesByAnimeId = Injekt.get(),
     private val migrateAnime: MigrateAnimeUseCase = Injekt.get(),
+    // ANZ -->
+    private val cloudStreamManager: eu.kanade.tachiyomi.data.cloudstream.CloudStreamManager = Injekt.get(),
+    // ANZ <--
 ) : StateScreenModel<MigrationListScreenModel.State>(State()) {
 
     private val smartSearchEngine = SmartSourceSearchEngine(extraSearchQuery)
@@ -76,6 +80,12 @@ class MigrationListScreenModel(
 
     init {
         screenModelScope.launchIO {
+            // ANZ -->
+            kotlinx.coroutines.withTimeoutOrNull(10_000L) {
+                cloudStreamManager.awaitInitialized()
+                sourceManager.isInitialized.first { it }
+            }
+            // ANZ <--
             val animeList = animeIds
                 .map {
                     async {

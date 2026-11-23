@@ -12,8 +12,27 @@ private const val HASH_SHIFT_BITS = 8
 private const val HASH_BYTES_TO_READ = 7
 private const val POSITIVE_MASK = 0x7FFF_FFFF_FFFF_FFFFL
 
-fun computeCloudStreamSourceId(providerName: String, lang: String): Long {
+/**
+ * Computes a 100% deterministic, stable Long source ID from a canonical plugin key
+ * (`pluginPackageName + ":" + mainApi.name`) so IDs never shift across updates or backups.
+ */
+fun computeCloudStreamSourceId(pluginPackageName: String, providerName: String): Long {
+    val canonicalPlugin = pluginPackageName.trim().lowercase(Locale.ROOT)
+    val canonicalProvider = providerName.trim().lowercase(Locale.ROOT)
+    val key = "$canonicalPlugin:$canonicalProvider"
+    return hashCloudStreamKey(key)
+}
+
+/**
+ * Legacy 2.5v source ID computation (`cloudstream|<providerName>|<lang>`) kept so existing
+ * library entries and backups created before 2.7v resolve seamlessly to installed plugins.
+ */
+fun computeLegacyCloudStreamSourceId(providerName: String, lang: String): Long {
     val key = "cloudstream|${providerName.trim().lowercase(Locale.ROOT)}|${lang.trim().lowercase(Locale.ROOT)}"
+    return hashCloudStreamKey(key)
+}
+
+private fun hashCloudStreamKey(key: String): Long {
     val digest = MessageDigest.getInstance("SHA-256").digest(key.toByteArray(Charsets.UTF_8))
     var acc = 0L
     for (i in 0 until HASH_BYTES_TO_READ) {

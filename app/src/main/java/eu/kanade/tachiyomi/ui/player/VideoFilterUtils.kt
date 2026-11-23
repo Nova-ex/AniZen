@@ -103,94 +103,16 @@ fun applyTheme(mpv: MPV?, theme: VideoFilterTheme, prefs: DecoderPreferences) {
     mpv?.setPropertyInt("deband-grain", 48)
 }
 
-fun isAnime4KActive(prefs: DecoderPreferences): Boolean {
-    if (!prefs.enableAnime4K().get()) return false
-    val mode = try {
-        Anime4KManager.Mode.valueOf(prefs.anime4kMode().get())
-    } catch (e: Exception) {
-        Anime4KManager.Mode.OFF
-    }
-    return mode != Anime4KManager.Mode.OFF
-}
-
-private val customShaderLineRegex = Regex("""^\s*(?:--)?glsl-shaders?(?:-append)?\s*=""", RegexOption.MULTILINE)
-
-fun hasCustomGlslShaders(mpvConf: String): Boolean {
-    return customShaderLineRegex.containsMatchIn(mpvConf)
-}
-
-fun setAdrenoSafeFboFormat(mpv: MPV?, isInit: Boolean = true, mpvOptionNames: Set<String> = emptySet()) {
-    if (mpv == null || "fbo-format" in mpvOptionNames) return
-    if (isInit) {
-        val rc = mpv.setOptionString("fbo-format", "rgba16hf")
-        if (rc < 0) {
-            logcat("Anime4K", LogPriority.WARN) { "fbo-format=rgba16hf rejected (rc=$rc), falling back to rgba16f" }
-            val fallbackRc = mpv.setOptionString("fbo-format", "rgba16f")
-            if (fallbackRc < 0) {
-                logcat("Anime4K", LogPriority.WARN) { "fbo-format=rgba16f rejected (rc=$fallbackRc), using auto" }
-                mpv.setOptionString("fbo-format", "auto")
-            }
-        }
-    } else {
-        runCatching { mpv.setPropertyString("fbo-format", "rgba16hf") }
-    }
-}
-
-private fun setMpvOptionOrProperty(
-    mpv: MPV?,
-    name: String,
-    value: String,
-    isInit: Boolean,
-    mpvOptionNames: Set<String> = emptySet(),
-) {
-    if (mpv == null || name in mpvOptionNames) return
-    if (isInit) {
-        mpv.setOptionString(name, value)
-    } else {
-        mpv.setPropertyString(name, value)
-    }
-}
-
-fun applyAnime4KScalers(
-    mpv: MPV?,
-    active: Boolean,
-    prefs: DecoderPreferences,
-    isInit: Boolean,
-    mpvOptionNames: Set<String> = emptySet(),
-) {
-    if (mpv == null) return
-    if (active) {
-        setMpvOptionOrProperty(mpv, "scale", "ewa_lanczossharp", isInit, mpvOptionNames)
-        setMpvOptionOrProperty(mpv, "cscale", "ewa_lanczossharp", isInit, mpvOptionNames)
-        setMpvOptionOrProperty(mpv, "dscale", "mitchell", isInit, mpvOptionNames)
-        setMpvOptionOrProperty(mpv, "correct-downscaling", "yes", isInit, mpvOptionNames)
-        setMpvOptionOrProperty(mpv, "sigmoid-upscaling", "yes", isInit, mpvOptionNames)
-        setMpvOptionOrProperty(mpv, "dither", "fruit", isInit, mpvOptionNames)
-        setMpvOptionOrProperty(mpv, "gpu-dumb-mode", "no", isInit, mpvOptionNames)
-    } else {
-        val isHighQuality = prefs.highQualityScaling().get()
-        val scaler = if (isHighQuality) "spline36" else "bilinear"
-        setMpvOptionOrProperty(mpv, "scale", scaler, isInit, mpvOptionNames)
-        setMpvOptionOrProperty(mpv, "cscale", scaler, isInit, mpvOptionNames)
-        setMpvOptionOrProperty(mpv, "dscale", scaler, isInit, mpvOptionNames)
-        setMpvOptionOrProperty(mpv, "correct-downscaling", "no", isInit, mpvOptionNames)
-        setMpvOptionOrProperty(mpv, "sigmoid-upscaling", "no", isInit, mpvOptionNames)
-        setMpvOptionOrProperty(mpv, "dither", if (isHighQuality) "fruit" else "no", isInit, mpvOptionNames)
-        val dumbMode = if (prefs.smoothMotion().get()) "no" else "auto"
-        setMpvOptionOrProperty(mpv, "gpu-dumb-mode", dumbMode, isInit, mpvOptionNames)
-    }
-}
-
-fun applyAnime4K(
-    mpv: MPV?,
-    prefs: DecoderPreferences,
-    manager: Anime4KManager,
-    isInit: Boolean = false,
-    mpvView: AniyomiMPVView? = null,
-    mpvOptionNames: Set<String> = emptySet(),
-    hasCustomShaders: Boolean = false,
-) {
+fun applyAnime4K(mpv: MPV?, prefs: DecoderPreferences, manager: Anime4KManager, isInit: Boolean = false) {
     val enabled = prefs.enableAnime4K().get()
+
+    // DEFENSIVE: Anime4K is incompatible with gpu-next in current builds
+    val gpuNext = prefs.gpuNext().get()
+    if (enabled && gpuNext) {
+        logcat("Anime4K", LogPriority.WARN) { "Anime4K is incompatible with gpu-next. Skipping." }
+        if (!isInit) mpv?.setPropertyString("glsl-shaders", "")
+        return
+    }
 
     val mode = try {
         Anime4KManager.Mode.valueOf(prefs.anime4kMode().get())
@@ -203,56 +125,34 @@ fun applyAnime4K(
         Anime4KManager.Quality.BALANCED
     }
 
-    // Ensure initialization happened (and refresh updated shader bundle if needed)
+    // Ensure initialization happened
     manager.initialize()
 
     val chain = if (enabled) manager.getShaderChain(mode, quality) else ""
-    val shadersActive = chain.isNotEmpty()
-    logcat("Anime4K", LogPriority.DEBUG) { "Applying Anime4K chain (enabled=$enabled, mode=$mode, quality=$quality): $chain" }
+    logcat("Anime4K", LogPriority.DEBUG) { "Applying Anime4K chain (enabled=$enabled): $chain" }
 
-    if (shadersActive) {
-        // Enforce vo=gpu + gpu-api=opengl (never gpu-next) whenever Anime4K is enabled
-        if (prefs.gpuNext().get()) {
-            logcat("Anime4K", LogPriority.INFO) { "Disabling gpu-next because Anime4K requires vo=gpu + opengl" }
-            prefs.gpuNext().set(false)
+    if (chain.isNotEmpty()) {
+        if (isInit) {
+            mpv?.setOptionString("glsl-shaders", chain)
+        } else {
+            mpv?.setPropertyString("glsl-shaders", chain)
         }
-        mpvView?.setVo("gpu")
-        setMpvOptionOrProperty(mpv, "gpu-api", "opengl", isInit, mpvOptionNames)
-        if (!isInit) {
-            val currentVo = mpv?.getPropertyString("current-vo")
-            if (currentVo != null && currentVo != "gpu") {
-                mpv.setPropertyString("vo", "gpu")
-            }
-        }
-        setAdrenoSafeFboFormat(mpv, isInit = isInit, mpvOptionNames = mpvOptionNames)
-
-        // Force mediacodec-copy so MediaCodec frames are copied instead of OES SurfaceTexture
-        if (prefs.tryHWDecoding().get()) {
-            setMpvOptionOrProperty(mpv, "hwdec", "mediacodec-copy", isInit)
-        }
-
-        applyAnime4KScalers(mpv, active = true, prefs = prefs, isInit = isInit, mpvOptionNames = mpvOptionNames)
-        setMpvOptionOrProperty(mpv, "glsl-shaders", chain, isInit)
     } else {
-        setMpvOptionOrProperty(mpv, "glsl-shaders", "", isInit)
-        if (!hasCustomShaders) {
-            applyAnime4KScalers(mpv, active = false, prefs = prefs, isInit = isInit, mpvOptionNames = mpvOptionNames)
-            if (prefs.tryHWDecoding().get()) {
-                val needsCopy = prefs.smoothMotion().get() && prefs.interpolationFPSLimit().get() > 0
-                setMpvOptionOrProperty(mpv, "hwdec", if (needsCopy) "mediacodec-copy" else "mediacodec", isInit)
-            }
+        if (isInit) {
+            mpv?.setOptionString("glsl-shaders", "")
+        } else {
+            mpv?.setPropertyString("glsl-shaders", "")
         }
     }
 }
 
 fun applyInterpolation(mpv: MPV?, prefs: DecoderPreferences, context: Context?) {
     val enabled = prefs.smoothMotion().get()
-    val anime4kActive = isAnime4KActive(prefs)
     if (enabled) {
         val fpsLimit = prefs.interpolationFPSLimit().get() // ANZ
 
         if (prefs.tryHWDecoding().get()) {
-            val hwdecMode = if (fpsLimit > 0 || anime4kActive) "mediacodec-copy" else "mediacodec"
+            val hwdecMode = if (fpsLimit > 0) "mediacodec-copy" else "mediacodec"
             mpv?.setPropertyString("hwdec", hwdecMode)
         }
 
@@ -267,15 +167,14 @@ fun applyInterpolation(mpv: MPV?, prefs: DecoderPreferences, context: Context?) 
         mpv?.setPropertyString("gpu-dumb-mode", "no")
     } else {
         if (prefs.tryHWDecoding().get()) {
-            val hwdecMode = if (anime4kActive) "mediacodec-copy" else "mediacodec"
-            mpv?.setPropertyString("hwdec", hwdecMode)
+            mpv?.setPropertyString("hwdec", "mediacodec")
         }
         mpv?.setPropertyString("vf", buildVFChain(prefs))
         mpv?.setPropertyString("video-sync", "audio")
         mpv?.setPropertyString("video-sync-max-audio-change", "0.125")
         mpv?.setPropertyString("video-sync-max-video-change", "1")
         mpv?.setPropertyString("interpolation", "no")
-        mpv?.setPropertyString("gpu-dumb-mode", if (anime4kActive) "no" else "auto")
+        mpv?.setPropertyString("gpu-dumb-mode", "auto")
     }
 }
 // ANZ <--

@@ -7,6 +7,9 @@ import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import eu.kanade.domain.source.service.SourcePreferences
 import eu.kanade.presentation.util.ioCoroutineScope
+import eu.kanade.tachiyomi.data.cloudstream.CloudStreamAnimeSource
+import eu.kanade.tachiyomi.data.cloudstream.CloudStreamManager
+import eu.kanade.tachiyomi.data.cloudstream.isCloudStreamSourceId
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.source.CatalogueSource
 import eu.kanade.tachiyomi.source.model.FilterList
@@ -20,27 +23,33 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import tachiyomi.core.common.preference.toggle
 import tachiyomi.domain.anime.interactor.GetAnime
 import tachiyomi.domain.anime.interactor.NetworkToLocalAnime
 import tachiyomi.domain.anime.model.Anime
 import tachiyomi.domain.anime.model.toDomainAnime
+import tachiyomi.domain.remoteserver.model.isRemoteServerSourceId
 import tachiyomi.domain.source.service.SourceManager
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
 abstract class SearchScreenModel(
     initialState: State = State(),
-    sourcePreferences: SourcePreferences = Injekt.get(),
+    private val sourcePreferences: SourcePreferences = Injekt.get(),
     private val sourceManager: SourceManager = Injekt.get(),
     private val extensionManager: ExtensionManager = Injekt.get(),
     private val networkToLocalAnime: NetworkToLocalAnime = Injekt.get(),
     private val getAnime: GetAnime = Injekt.get(),
     private val preferences: SourcePreferences = Injekt.get(),
+    // ANZ -->
+    private val cloudStreamManager: CloudStreamManager = Injekt.get(),
+    // ANZ <--
 ) : StateScreenModel<SearchScreenModel.State>(initialState) {
 
     // Bounded parallelism without leaking a fixed thread pool:
@@ -48,9 +57,14 @@ abstract class SearchScreenModel(
     private val coroutineDispatcher = Dispatchers.IO.limitedParallelism(5)
     private var searchJob: Job? = null
 
-    private val enabledLanguages = sourcePreferences.enabledLanguages().get()
-    private val disabledSources = sourcePreferences.disabledSources().get()
-    protected val pinnedSources = sourcePreferences.pinnedSources().get()
+    // ANZ -->
+    private val enabledLanguages: Set<String>
+        get() = sourcePreferences.enabledLanguages().get()
+    private val disabledSources: Set<String>
+        get() = sourcePreferences.disabledSources().get()
+    protected val pinnedSources: Set<String>
+        get() = sourcePreferences.pinnedSources().get()
+    // ANZ <--
 
     private var lastQuery: String? = null
     private var lastSourceFilter: SourceFilter? = null
@@ -85,14 +99,25 @@ abstract class SearchScreenModel(
     }
 
     open fun getEnabledSources(): List<CatalogueSource> {
+        // ANZ -->
+        val activeLanguages = enabledLanguages
+        val disabled = disabledSources
+        val pinned = pinnedSources
         return sourceManager.getCatalogueSources()
-            .filter { it.lang in enabledLanguages && "${it.id}" !in disabledSources }
+            .filter { source ->
+                (
+                    source.lang in activeLanguages ||
+                        source.id.isCloudStreamSourceId() ||
+                        source.id.isRemoteServerSourceId()
+                    ) && "${source.id}" !in disabled
+            }
             .sortedWith(
                 compareBy(
-                    { "${it.id}" !in pinnedSources },
+                    { "${it.id}" !in pinned },
                     { "${it.name.lowercase()} (${it.lang})" },
                 ),
             )
+        // ANZ <--
     }
 
     private fun getSelectedSources(): List<CatalogueSource> {
@@ -103,11 +128,23 @@ abstract class SearchScreenModel(
             return enabledSources
         }
 
-        return extensionManager.installedExtensionsFlow.value
+        // ANZ -->
+        val extensionSources = extensionManager.installedExtensionsFlow.value
             .filter { it: eu.kanade.tachiyomi.extension.model.Extension.Installed -> it.pkgName == filter }
             .flatMap { it: eu.kanade.tachiyomi.extension.model.Extension.Installed -> it.sources }
             .filterIsInstance<CatalogueSource>()
             .filter { it in enabledSources }
+
+        val cloudStreamMatches = enabledSources
+            .filterIsInstance<CloudStreamAnimeSource>()
+            .filter { source ->
+                source.pluginPackageName.equals(filter, ignoreCase = true) ||
+                    source.pluginInternalName?.equals(filter, ignoreCase = true) == true ||
+                    source.id.toString() == filter
+            }
+
+        return (extensionSources + cloudStreamMatches).distinctBy { it.id }
+        // ANZ <--
     }
 
     fun updateSearchQuery(query: String?) {
@@ -134,25 +171,39 @@ abstract class SearchScreenModel(
         this.lastQuery = query
         this.lastSourceFilter = sourceFilter
 
-        val sources = getSelectedSources()
-
-        // Reuse previous results if possible
-        if (sameQuery) {
-            val existingResults = state.value.items
-            updateItems(
-                sources
-                    .associateWith { existingResults[it] ?: SearchItemResult.Loading }
-                    .toPersistentMap(),
-            )
-        } else {
-            updateItems(
-                sources
-                    .associateWith { SearchItemResult.Loading }
-                    .toPersistentMap(),
-            )
-        }
-
+        searchJob?.cancel()
         searchJob = ioCoroutineScope.launch {
+            // ANZ -->
+            if (!cloudStreamManager.isInitialized.value) {
+                withTimeoutOrNull(10_000L) {
+                    cloudStreamManager.awaitInitialized()
+                }
+            }
+            if (!sourceManager.isInitialized.value) {
+                withTimeoutOrNull(10_000L) {
+                    sourceManager.isInitialized.first { it }
+                }
+            }
+            // ANZ <--
+
+            val sources = getSelectedSources()
+
+            // Reuse previous results if possible
+            if (sameQuery) {
+                val existingResults = state.value.items
+                updateItems(
+                    sources
+                        .associateWith { existingResults[it] ?: SearchItemResult.Loading }
+                        .toPersistentMap(),
+                )
+            } else {
+                updateItems(
+                    sources
+                        .associateWith { SearchItemResult.Loading }
+                        .toPersistentMap(),
+                )
+            }
+
             sources.map { source ->
                 async {
                     if (state.value.items[source] !is SearchItemResult.Loading) {

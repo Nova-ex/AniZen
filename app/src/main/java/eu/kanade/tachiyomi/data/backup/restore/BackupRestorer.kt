@@ -17,13 +17,20 @@ import eu.kanade.tachiyomi.data.backup.restore.restorers.CustomButtonRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.ExtensionRepoRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.ExtensionsRestorer
 import eu.kanade.tachiyomi.data.backup.restore.restorers.PreferenceRestorer
+import eu.kanade.tachiyomi.data.cloudstream.CloudStreamManager
+import eu.kanade.tachiyomi.data.cloudstream.isCloudStreamSourceId
 import eu.kanade.tachiyomi.util.system.createFileInCacheDir
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import tachiyomi.core.common.i18n.stringResource
+import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.i18n.MR
+import uy.kohesive.injekt.Injekt
+import uy.kohesive.injekt.api.get
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -40,6 +47,10 @@ class BackupRestorer(
     private val animeRestorer: AnimeRestorer = AnimeRestorer(isSync),
     private val customButtonRestorer: CustomButtonRestorer = CustomButtonRestorer(),
     private val extensionsRestorer: ExtensionsRestorer = ExtensionsRestorer(context),
+    // ANZ -->
+    private val cloudStreamManager: CloudStreamManager = Injekt.get(),
+    private val sourceManager: SourceManager = Injekt.get(),
+    // ANZ <--
 ) {
 
     private var restoreAmount = 0
@@ -70,6 +81,15 @@ class BackupRestorer(
     }
 
     private suspend fun restoreFromFile(uri: Uri, options: RestoreOptions) {
+        // ANZ -->
+        // Ensure CloudStream .cs3 plugins and SourceManager are fully initialized before
+        // resolving restored sources so backups never fall back to missing-source stubs.
+        withTimeoutOrNull(15_000L) {
+            cloudStreamManager.awaitInitialized()
+            sourceManager.isInitialized.first { it }
+        }
+        // ANZ <--
+
         val backup = BackupDecoder(context).decode(uri)
 
         // SY -->
@@ -158,9 +178,18 @@ class BackupRestorer(
                 // seasons/linked entries logic
                 val seasons = backupAnimes.filter { s -> s.parentId == it.id && it.id != 0L }
 
+                // ANZ -->
+                val resolvedBackupAnime = if (it.source.isCloudStreamSourceId()) {
+                    val canonicalId = cloudStreamManager.resolveCanonicalSourceId(it.source)
+                    if (canonicalId != it.source) it.copy(source = canonicalId) else it
+                } else {
+                    it
+                }
+                // ANZ <--
+
                 try {
-                    val customInfo = it.getCustomAnimeInfo()
-                    animeRestorer.restore(it, backupAnimeCategories, customInfo, seasons)
+                    val customInfo = resolvedBackupAnime.getCustomAnimeInfo()
+                    animeRestorer.restore(resolvedBackupAnime, backupAnimeCategories, customInfo, seasons)
                 } catch (e: Exception) {
                     val sourceName = animeSourceMapping[it.source] ?: it.source.toString()
                     errors.add(Date() to "${it.title} [$sourceName]: ${e.message}")

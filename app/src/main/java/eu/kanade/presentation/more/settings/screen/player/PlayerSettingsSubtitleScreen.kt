@@ -6,7 +6,9 @@ import androidx.compose.runtime.remember
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.screen.SearchableSettings
 import eu.kanade.tachiyomi.ui.player.settings.SubtitlePreferences
+import kotlinx.collections.immutable.persistentListOf
 import tachiyomi.i18n.MR
+import tachiyomi.i18n.ank.AMR
 import tachiyomi.presentation.core.i18n.stringResource
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
@@ -25,6 +27,11 @@ object PlayerSettingsSubtitleScreen : SearchableSettings {
         val whitelist = subtitlePreferences.subtitleWhitelist()
         val blacklist = subtitlePreferences.subtitleBlacklist()
         val disableAutoSubtitles = subtitlePreferences.disableAutoSubtitles()
+        // ANZ -->
+        val openSubtitlesApiKey = subtitlePreferences.openSubtitlesApiKey()
+        val openSubtitlesUsername = subtitlePreferences.openSubtitlesUsername()
+        val openSubtitlesPassword = subtitlePreferences.openSubtitlesPassword()
+        // ANZ <--
 
         return listOf(
             Preference.PreferenceItem.SwitchPreference(
@@ -47,6 +54,31 @@ object PlayerSettingsSubtitleScreen : SearchableSettings {
                 title = stringResource(MR.strings.pref_player_subtitle_blacklist),
                 dialogSubtitle = stringResource(MR.strings.pref_player_subtitle_blacklist_info),
             ),
+            // ANZ -->
+            Preference.PreferenceGroup(
+                title = stringResource(AMR.strings.pref_category_opensubtitles),
+                preferenceItems = persistentListOf(
+                    Preference.PreferenceItem.InfoPreference(
+                        title = stringResource(AMR.strings.pref_opensubtitles_info),
+                    ),
+                    Preference.PreferenceItem.EditTextPreference(
+                        pref = openSubtitlesApiKey,
+                        title = stringResource(AMR.strings.pref_opensubtitles_api_key),
+                        subtitle = stringResource(AMR.strings.pref_opensubtitles_api_key_summary),
+                    ),
+                    Preference.PreferenceItem.EditTextPreference(
+                        pref = openSubtitlesUsername,
+                        title = stringResource(AMR.strings.pref_opensubtitles_username),
+                        subtitle = "%s",
+                    ),
+                    Preference.PreferenceItem.EditTextPreference(
+                        pref = openSubtitlesPassword,
+                        title = stringResource(AMR.strings.pref_opensubtitles_password),
+                        subtitle = if (openSubtitlesPassword.get().isNotBlank()) "••••••••" else "",
+                    ),
+                ),
+            ),
+            // ANZ <--
         )
     }
 }

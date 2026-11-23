@@ -443,13 +443,10 @@ fun Anime4KCard() {
                 )
                 Switch(
                     checked = enableAnime4K,
-                    onCheckedChange = { enabled ->
-                        decoderPreferences.enableAnime4K().set(enabled)
+                    onCheckedChange = {
+                        decoderPreferences.enableAnime4K().set(it)
                         // ANZ -->
-                        if (enabled && decoderPreferences.anime4kMode().get() == Anime4KManager.Mode.OFF.name) {
-                            decoderPreferences.anime4kMode().set(Anime4KManager.Mode.A.name)
-                        }
-                        applyAnime4K(mpv, decoderPreferences, anime4kManager, mpvView = activity?.player)
+                        applyAnime4K(mpv, decoderPreferences, anime4kManager)
                         // ANZ <--
                     },
                 )
@@ -476,7 +473,7 @@ fun Anime4KCard() {
                             onClick = {
                                 decoderPreferences.anime4kMode().set(mode.name)
                                 // ANZ -->
-                                applyAnime4K(mpv, decoderPreferences, anime4kManager, mpvView = activity?.player)
+                                applyAnime4K(mpv, decoderPreferences, anime4kManager)
                                 // ANZ <--
                             },
                             label = { Text(mode.name.replace("_", "+")) },
@@ -505,7 +502,7 @@ fun Anime4KCard() {
                             onClick = {
                                 decoderPreferences.anime4kQuality().set(quality.name)
                                 // ANZ -->
-                                applyAnime4K(mpv, decoderPreferences, anime4kManager, mpvView = activity?.player)
+                                applyAnime4K(mpv, decoderPreferences, anime4kManager)
                                 // ANZ <--
                             },
                             label = { Text(label) },

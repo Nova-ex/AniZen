@@ -41,11 +41,17 @@ class CloudStreamAnimeSource(
     val provider: MainAPI,
     val iconUrl: String? = null,
     val pluginInternalName: String? = null,
+    val pluginPackageName: String = resolveCanonicalPluginPackageName(provider, pluginInternalName),
+    pluginLanguage: String? = null,
 ) : AnimeHttpSource() {
 
-    override val lang: String = normalizeLangCode(provider.lang)
+    override val lang: String = normalizeLangCode(
+        provider.lang.takeIf { it.isNotBlank() } ?: pluginLanguage,
+    )
 
-    override val id: Long = computeCloudStreamSourceId(provider.name, lang)
+    override val id: Long = computeCloudStreamSourceId(pluginPackageName, provider.name)
+
+    val legacyId: Long = computeLegacyCloudStreamSourceId(provider.name, lang)
 
     override val name: String = provider.name
 
@@ -99,30 +105,55 @@ class CloudStreamAnimeSource(
                 return@withIOContext loadMainPageSection(sectionIndex = index, page = page)
             }
 
+            // Stateless search: never requires prior getMainPage or browse UI state.
             val pagedResponse = runCatching {
                 provider.search(trimmedQuery, page)
             }.onFailure {
-                logcat(LogPriority.WARN, it) { "CloudStream search(query, page) failed for ${provider.name}" }
+                if (it !is NotImplementedError) {
+                    logcat(LogPriority.WARN, it) { "CloudStream search(query, page) failed for ${provider.name}" }
+                }
             }.getOrNull()
 
-            if (pagedResponse != null && pagedResponse.items.isNotEmpty()) {
-                val animes = pagedResponse.items
-                    .distinctBy { it.url }
-                    .map { it.toSAnime() }
-                return@withIOContext AnimesPage(animes, hasNextPage = pagedResponse.hasNext)
+            val pagedItems = pagedResponse?.items
+                ?.filter { it.url.isNotBlank() }
+                ?.distinctBy { it.url }
+                .orEmpty()
+            if (pagedItems.isNotEmpty()) {
+                val animes = pagedItems.map { it.toSAnime() }
+                return@withIOContext AnimesPage(animes, hasNextPage = pagedResponse?.hasNext == true)
             }
 
             if (page == 1) {
                 val simpleItems = runCatching {
                     provider.search(trimmedQuery)
                 }.onFailure {
-                    logcat(LogPriority.WARN, it) { "CloudStream search(query) failed for ${provider.name}" }
-                }.getOrNull().orEmpty()
+                    if (it !is NotImplementedError) {
+                        logcat(LogPriority.WARN, it) { "CloudStream search(query) failed for ${provider.name}" }
+                    }
+                }.getOrNull()
+                    ?.filter { it.url.isNotBlank() }
+                    ?.distinctBy { it.url }
+                    .orEmpty()
 
-                val animes = simpleItems
-                    .distinctBy { it.url }
-                    .map { it.toSAnime() }
-                return@withIOContext AnimesPage(animes, hasNextPage = false)
+                if (simpleItems.isNotEmpty()) {
+                    return@withIOContext AnimesPage(simpleItems.map { it.toSAnime() }, hasNextPage = false)
+                }
+
+                // Fallback to quickSearch(query) when search(query) returns null/empty.
+                val quickItems = runCatching {
+                    provider.quickSearch(trimmedQuery)
+                }.onFailure {
+                    if (it !is NotImplementedError) {
+                        logcat(LogPriority.WARN, it) { "CloudStream quickSearch(query) failed for ${provider.name}" }
+                    }
+                }.getOrNull()
+                    ?.filter { it.url.isNotBlank() }
+                    ?.distinctBy { it.url }
+                    .orEmpty()
+
+                if (quickItems.isNotEmpty()) {
+                    return@withIOContext AnimesPage(quickItems.map { it.toSAnime() }, hasNextPage = false)
+                }
             }
 
             AnimesPage(emptyList(), hasNextPage = false)
@@ -131,28 +162,40 @@ class CloudStreamAnimeSource(
 
     override suspend fun getAnimeDetails(anime: SAnime): SAnime {
         return withIOContext {
-            val loaded = loadDetailsCached(anime.url, forceRefresh = true)
-                ?: return@withIOContext anime.apply { initialized = true }
+            val resolvedUrl = resolveProviderUrl(anime.url)
+            val loaded = loadDetailsCached(resolvedUrl, forceRefresh = true)
+                ?: return@withIOContext SAnime.create().apply {
+                    url = resolvedUrl.ifBlank { anime.url }
+                    title = anime.title
+                    thumbnail_url = anime.thumbnail_url
+                    description = anime.description
+                    genre = anime.genre
+                    author = anime.author
+                    status = anime.status
+                    initialized = true
+                }
 
             SAnime.create().apply {
-                url = loaded.url.ifBlank { anime.url }
+                url = loaded.url.ifBlank { resolvedUrl.ifBlank { anime.url } }
                 title = loaded.name.ifBlank { anime.title }
                 thumbnail_url = loaded.posterUrl?.takeIf { it.isNotBlank() }
                     ?: loaded.backgroundPosterUrl?.takeIf { it.isNotBlank() }
                     ?: anime.thumbnail_url
-                description = buildDescription(loaded)
+                description = buildDescription(loaded) ?: anime.description
                 genre = loaded.tags
                     ?.map { it.trim() }
                     ?.filter { it.isNotBlank() }
                     ?.distinct()
                     ?.takeIf { it.isNotEmpty() }
                     ?.joinToString(", ")
+                    ?: anime.genre
                 status = resolveShowStatus(loaded)
                 author = loaded.actors
                     ?.mapNotNull { it.actor.name.takeIf(String::isNotBlank) }
                     ?.take(MAX_AUTHORS_TO_DISPLAY)
                     ?.takeIf { it.isNotEmpty() }
                     ?.joinToString(", ")
+                    ?: anime.author
                 initialized = true
             }
         }
@@ -160,56 +203,82 @@ class CloudStreamAnimeSource(
 
     override suspend fun getEpisodeList(anime: SAnime): List<SEpisode> {
         return withIOContext {
-            val loaded = loadDetailsCached(anime.url, forceRefresh = false)
-                ?: return@withIOContext emptyList()
+            val resolvedUrl = resolveProviderUrl(anime.url)
+            if (resolvedUrl.isBlank()) return@withIOContext emptyList()
 
-            when (loaded) {
-                is TvSeriesLoadResponse -> mapEpisodesList(loaded.episodes, scanlatorLabel = null)
-                is AnimeLoadResponse -> {
-                    val multipleGroups = loaded.episodes.size > 1
-                    val mapped = mutableListOf<SortableEpisode>()
-                    loaded.episodes.forEach { (dubStatus, epList) ->
-                        val label = if (multipleGroups) dubStatus.name else null
-                        epList.forEachIndexed { idx, ep ->
-                            mapped.add(ep.toSortableEpisode(idx + 1, label))
-                        }
-                    }
-                    mapped
-                        .distinctBy { it.episode.url }
-                        .sortedWith(EPISODE_DESC_COMPARATOR)
-                        .map { it.episode }
-                }
-                is MovieLoadResponse -> {
-                    if (loaded.dataUrl.isBlank()) {
-                        emptyList()
-                    } else {
-                        listOf(
-                            SEpisode.create().apply {
-                                url = loaded.dataUrl
-                                name = loaded.name.ifBlank { "Movie" }
-                                episode_number = 1f
-                                date_upload = 0L
-                            },
-                        )
-                    }
-                }
-                is LiveStreamLoadResponse -> {
-                    if (loaded.dataUrl.isBlank()) {
-                        emptyList()
-                    } else {
-                        listOf(
-                            SEpisode.create().apply {
-                                url = loaded.dataUrl
-                                name = loaded.name.ifBlank { "Live" }
-                                episode_number = 1f
-                                date_upload = 0L
-                            },
-                        )
-                    }
-                }
-                else -> emptyList()
+            val loaded = loadDetailsCached(resolvedUrl, forceRefresh = false)
+            val episodes = loaded?.let { extractEpisodes(it) }.orEmpty()
+            if (episodes.isNotEmpty()) {
+                return@withIOContext episodes
             }
+
+            // Retry with a fresh load when cached response had no episodes (e.g. merged anime refresh).
+            val refreshed = loadDetailsCached(resolvedUrl, forceRefresh = true)
+                ?: return@withIOContext emptyList()
+            extractEpisodes(refreshed)
         }
+    }
+
+    private fun extractEpisodes(loaded: LoadResponse): List<SEpisode> {
+        return when (loaded) {
+            is TvSeriesLoadResponse -> mapEpisodesList(loaded.episodes, scanlatorLabel = null)
+            is AnimeLoadResponse -> {
+                val multipleGroups = loaded.episodes.size > 1
+                val mapped = mutableListOf<SortableEpisode>()
+                loaded.episodes.forEach { (dubStatus, epList) ->
+                    val label = if (multipleGroups) dubStatus.name else null
+                    epList.forEachIndexed { idx, ep ->
+                        mapped.add(ep.toSortableEpisode(idx + 1, label))
+                    }
+                }
+                mapped
+                    .distinctBy { it.episode.url }
+                    .sortedWith(EPISODE_DESC_COMPARATOR)
+                    .map { it.episode }
+            }
+            is MovieLoadResponse -> {
+                if (loaded.dataUrl.isBlank()) {
+                    emptyList()
+                } else {
+                    listOf(
+                        SEpisode.create().apply {
+                            url = loaded.dataUrl
+                            name = loaded.name.ifBlank { "Movie" }
+                            episode_number = 1f
+                            date_upload = 0L
+                        },
+                    )
+                }
+            }
+            is LiveStreamLoadResponse -> {
+                if (loaded.dataUrl.isBlank()) {
+                    emptyList()
+                } else {
+                    listOf(
+                        SEpisode.create().apply {
+                            url = loaded.dataUrl
+                            name = loaded.name.ifBlank { "Live" }
+                            episode_number = 1f
+                            date_upload = 0L
+                        },
+                    )
+                }
+            }
+            else -> emptyList()
+        }
+    }
+
+    private fun resolveProviderUrl(rawUrl: String): String {
+        val trimmed = rawUrl.trim()
+        if (trimmed.isBlank()) return trimmed
+        if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
+            return trimmed
+        }
+        val base = provider.mainUrl.trimEnd('/')
+        if (base.startsWith("http", ignoreCase = true)) {
+            return if (trimmed.startsWith("/")) "$base$trimmed" else "$base/$trimmed"
+        }
+        return trimmed
     }
 
     override suspend fun getHosterList(episode: SEpisode): List<Hoster> {
@@ -636,16 +705,48 @@ class CloudStreamAnimeSource(
             else -> "${quality}p"
         }
 
+        internal fun resolveCanonicalPluginPackageName(
+            provider: MainAPI,
+            pluginInternalName: String? = null,
+        ): String {
+            return pluginInternalName?.trim()?.takeIf { it.isNotBlank() }
+                ?: provider.sourcePlugin
+                    ?.substringAfterLast('/')
+                    ?.substringAfterLast('\\')
+                    ?.removeSuffix(".cs3")
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                ?: provider.javaClass.name
+        }
+
         internal fun normalizeLangCode(raw: String?): String {
             val cleaned = raw?.trim()?.lowercase(Locale.ROOT).orEmpty()
             if (cleaned.isBlank()) return "all"
-            return when {
-                cleaned == "arabic" || cleaned.startsWith("ar") -> "ar"
-                cleaned == "english" || cleaned.startsWith("en") -> "en"
-                cleaned == "multi" || cleaned == "all" || cleaned == "universal" -> "all"
-                cleaned.contains('-') -> cleaned.substringBefore('-')
-                cleaned.contains('_') -> cleaned.substringBefore('_')
-                else -> cleaned
+            val baseToken = cleaned.substringBefore('-').substringBefore('_').trim()
+            return when (baseToken) {
+                "ar", "ara", "arabic", "العربية", "عربي" -> "ar"
+                "en", "eng", "english" -> "en"
+                "ja", "jp", "jpn", "japanese" -> "ja"
+                "fr", "fra", "fre", "french" -> "fr"
+                "es", "spa", "spanish" -> "es"
+                "de", "deu", "ger", "german" -> "de"
+                "it", "ita", "italian" -> "it"
+                "pt", "por", "portuguese" -> "pt"
+                "ru", "rus", "russian" -> "ru"
+                "tr", "tur", "turkish" -> "tr"
+                "ko", "kor", "korean" -> "ko"
+                "zh", "zho", "chi", "chinese" -> "zh"
+                "id", "in", "ind", "indonesian" -> "id"
+                "hi", "hin", "hindi" -> "hi"
+                "vi", "vie", "vietnamese" -> "vi"
+                "th", "tha", "thai" -> "th"
+                "pl", "pol", "polish" -> "pl"
+                "nl", "nld", "dut", "dutch" -> "nl"
+                "uk", "ukr", "ukrainian" -> "uk"
+                "fa", "fas", "per", "persian" -> "fa"
+                "ur", "urd", "urdu" -> "ur"
+                "multi", "all", "universal", "none", "other" -> "all"
+                else -> baseToken.ifBlank { "all" }
             }
         }
     }

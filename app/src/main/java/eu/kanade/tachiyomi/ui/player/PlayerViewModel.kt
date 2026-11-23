@@ -69,8 +69,10 @@ import eu.kanade.tachiyomi.data.saver.ImageSaver
 import eu.kanade.tachiyomi.data.saver.Location
 import eu.kanade.tachiyomi.data.sync.SyncDataJob
 import eu.kanade.tachiyomi.data.track.TrackerManager
+import eu.kanade.tachiyomi.data.track.TrackerTitleNormalizer
 import eu.kanade.tachiyomi.data.track.anilist.Anilist
 import eu.kanade.tachiyomi.data.track.myanimelist.MyAnimeList
+import eu.kanade.tachiyomi.network.NetworkHelper
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.ui.player.controls.components.IndexedSegment
 import eu.kanade.tachiyomi.ui.player.controls.components.sheets.HosterState
@@ -80,12 +82,15 @@ import eu.kanade.tachiyomi.ui.player.domain.BrightnessManager
 import eu.kanade.tachiyomi.ui.player.domain.TrackSelect
 import eu.kanade.tachiyomi.ui.player.loader.EpisodeLoader
 import eu.kanade.tachiyomi.ui.player.loader.HosterLoader
-import eu.kanade.tachiyomi.ui.player.settings.AdvancedPlayerPreferences
 import eu.kanade.tachiyomi.ui.player.settings.AudioPreferences
 import eu.kanade.tachiyomi.ui.player.settings.DecoderPreferences
 import eu.kanade.tachiyomi.ui.player.settings.GesturePreferences
 import eu.kanade.tachiyomi.ui.player.settings.PlayerPreferences
 import eu.kanade.tachiyomi.ui.player.settings.SubtitlePreferences
+import eu.kanade.tachiyomi.ui.player.subtitles.OnlineSubtitleLanguage
+import eu.kanade.tachiyomi.ui.player.subtitles.OnlineSubtitleResult
+import eu.kanade.tachiyomi.ui.player.subtitles.OnlineSubtitleUiState
+import eu.kanade.tachiyomi.ui.player.subtitles.OpenSubtitlesClient
 import eu.kanade.tachiyomi.ui.player.utils.AniSkipApi
 import eu.kanade.tachiyomi.ui.player.utils.ChapterUtils
 import eu.kanade.tachiyomi.ui.player.utils.ChapterUtils.Companion.getStringRes
@@ -212,16 +217,6 @@ class PlayerViewModel @JvmOverloads constructor(
         it.setOptionString("icc-cache-dir", cachePath)
         it.setOptionString("keep-open", "yes")
         // ANZ -->
-        val mpvConf = Injekt.get<AdvancedPlayerPreferences>().mpvConf().get()
-        val hasShaders = isAnime4KActive(decoderPreferences) || hasCustomGlslShaders(mpvConf)
-        if (hasShaders || !decoderPreferences.gpuNext().get()) {
-            it.setOptionString("gpu-api", "opengl")
-        }
-        if (hasShaders) {
-            it.setOptionString("vo", "gpu")
-            it.setOptionString("gpu-dumb-mode", "no")
-        }
-        setAdrenoSafeFboFormat(it, isInit = true)
         it.setOptionString("volume-max", (audioPreferences.volumeBoostCap().get() + 100).toString())
         // Start the engine at the remembered speed. This must happen here, as a pre-init option,
         // rather than as a property write after initialization: `playbackSpeed` snapshots the
@@ -278,6 +273,15 @@ class PlayerViewModel @JvmOverloads constructor(
 
     private val _externalSubtitleTracks = MutableStateFlow<List<VideoTrack.External>>(emptyList())
     val externalSubtitleTracks = _externalSubtitleTracks.asStateFlow()
+
+    // ANZ -->
+    private val openSubtitlesClient: OpenSubtitlesClient by lazy {
+        OpenSubtitlesClient(Injekt.get<NetworkHelper>(), subtitlePreferences)
+    }
+    private val _onlineSubtitleState = MutableStateFlow(OnlineSubtitleUiState())
+    val onlineSubtitleState = _onlineSubtitleState.asStateFlow()
+    private var onlineSubtitleSearchJob: Job? = null
+    // ANZ <--
 
     private val _externalAudioTracks = MutableStateFlow<List<VideoTrack.External>>(emptyList())
     val externalAudioTracks = _externalAudioTracks.asStateFlow()
@@ -643,6 +647,14 @@ class PlayerViewModel @JvmOverloads constructor(
         // ANK <--
         _externalAudioTracks.update { _ -> emptyList() }
         _externalSubtitleTracks.update { _ -> emptyList() }
+        // ANZ -->
+        onlineSubtitleSearchJob?.cancel()
+        _onlineSubtitleState.update {
+            OnlineSubtitleUiState(
+                language = OnlineSubtitleLanguage.fromCode(subtitlePreferences.openSubtitlesPreferredLang().get()),
+            )
+        }
+        // ANZ <--
     }
 
     // ANK -->
@@ -816,17 +828,222 @@ class PlayerViewModel @JvmOverloads constructor(
     }
 
     fun addSubtitle(uri: Uri) {
-        val url = uri.toString()
-        val isContentUri = url.startsWith("content://")
-        val path = (if (isContentUri) uri.openContentFd(context.applicationContext) else url)
-            ?: return
-        val name = if (isContentUri) uri.getFileName(context.applicationContext) else null
-        if (name == null) {
-            mpv.command("sub-add", path, "cached")
-        } else {
-            mpv.command("sub-add", path, "cached", name)
+        // ANZ -->
+        viewModelScope.launchIO {
+            val appContext = context.applicationContext
+            val url = uri.toString()
+            val isContentUri = url.startsWith("content://")
+            val displayName = if (isContentUri) {
+                runCatching { uri.getFileName(appContext) }.getOrNull()
+            } else {
+                uri.lastPathSegment
+            }?.takeIf { it.isNotBlank() }
+
+            val resolvedPath: String? = if (isContentUri) {
+                copyExternalSubtitleToCache(appContext, uri, displayName)
+                    ?: runCatching { uri.openContentFd(appContext) }.getOrNull()
+            } else {
+                uri.resolveUri(appContext) ?: url
+            }
+
+            if (resolvedPath.isNullOrBlank()) {
+                playerUpdate.update {
+                    PlayerUpdates.ShowText(
+                        appContext.stringResource(tachiyomi.i18n.ank.AMR.strings.player_ext_subtitle_failed),
+                    )
+                }
+                return@launchIO
+            }
+
+            val trackTitle = displayName ?: File(resolvedPath).name
+            if (trackTitle.isBlank()) {
+                mpv.command("sub-add", resolvedPath, "select")
+            } else {
+                mpv.command("sub-add", resolvedPath, "select", trackTitle)
+            }
+            playerUpdate.update {
+                PlayerUpdates.ShowText(
+                    appContext.stringResource(
+                        tachiyomi.i18n.ank.AMR.strings.player_ext_subtitle_loaded,
+                        trackTitle.ifBlank { "External" },
+                    ),
+                )
+            }
+        }
+        // ANZ <--
+    }
+
+    // ANZ -->
+    private fun copyExternalSubtitleToCache(
+        appContext: android.content.Context,
+        uri: Uri,
+        displayName: String?,
+    ): String? {
+        return runCatching {
+            val cacheDir = File(appContext.cacheDir, "external_subtitles").apply { mkdirs() }
+            val ext = OpenSubtitlesClient.inferExtensionFromName(displayName ?: uri.lastPathSegment) ?: "srt"
+            val baseName = (displayName ?: "external_sub")
+                .substringBeforeLast('.')
+                .replace(Regex("[^a-zA-Z0-9._-]+"), "_")
+                .trim('_')
+                .take(48)
+                .ifBlank { "external_sub" }
+            val destFile = File(cacheDir, "${baseName}_${System.currentTimeMillis()}.$ext")
+            appContext.contentResolver.openInputStream(uri)?.use { input ->
+                destFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            } ?: return null
+            if (destFile.length() == 0L) {
+                destFile.delete()
+                return null
+            }
+            destFile.absolutePath
+        }.onFailure {
+            logcat(LogPriority.WARN, it) { "Failed copying external subtitle URI to cache: $uri" }
+        }.getOrNull()
+    }
+
+    fun prepareOnlineSubtitleSearch() {
+        val current = _onlineSubtitleState.value
+        if (current.hasSearched && current.query.isNotBlank()) return
+
+        val rawTitle = currentAnime.value?.title
+            ?.takeIf { it.isNotBlank() }
+            ?: animeTitle.value.takeIf { it.isNotBlank() }
+            ?: mediaTitle.value
+        val cleanedQuery = TrackerTitleNormalizer.normalizeForAutoMatch(rawTitle)
+        val ep = currentEpisode.value
+        val episodeNum = ep?.episode_number
+            ?.takeIf { it > 0f }
+            ?.toInt()
+            ?: extractEpisodeNumberFromName(ep?.name.orEmpty())
+        val seasonNum = extractSeasonNumber(ep?.name.orEmpty())
+            ?: extractSeasonNumber(rawTitle)
+            ?: if (episodeNum != null) 1 else null
+        val preferredLang = OnlineSubtitleLanguage.fromCode(
+            subtitlePreferences.openSubtitlesPreferredLang().get(),
+        )
+
+        _onlineSubtitleState.update {
+            it.copy(
+                query = it.query.ifBlank { cleanedQuery },
+                season = it.season.ifBlank { seasonNum?.toString().orEmpty() },
+                episode = it.episode.ifBlank { episodeNum?.toString().orEmpty() },
+                language = preferredLang,
+                errorMessage = null,
+            )
+        }
+        if (_onlineSubtitleState.value.query.isNotBlank()) {
+            searchOnlineSubtitles()
         }
     }
+
+    fun updateOnlineSubtitleQuery(query: String) {
+        _onlineSubtitleState.update { it.copy(query = query) }
+    }
+
+    fun updateOnlineSubtitleSeason(season: String) {
+        _onlineSubtitleState.update { it.copy(season = season.filter(Char::isDigit).take(3)) }
+    }
+
+    fun updateOnlineSubtitleEpisode(episode: String) {
+        _onlineSubtitleState.update { it.copy(episode = episode.filter(Char::isDigit).take(4)) }
+    }
+
+    fun selectOnlineSubtitleLanguage(language: OnlineSubtitleLanguage) {
+        subtitlePreferences.openSubtitlesPreferredLang().set(language.code)
+        _onlineSubtitleState.update { it.copy(language = language) }
+        if (_onlineSubtitleState.value.query.isNotBlank()) {
+            searchOnlineSubtitles()
+        }
+    }
+
+    fun searchOnlineSubtitles() {
+        val snapshot = _onlineSubtitleState.value
+        val query = snapshot.query.trim()
+        if (query.isBlank()) return
+
+        onlineSubtitleSearchJob?.cancel()
+        onlineSubtitleSearchJob = viewModelScope.launchIO {
+            _onlineSubtitleState.update {
+                it.copy(isSearching = true, hasSearched = true, errorMessage = null)
+            }
+            val season = snapshot.season.trim().toIntOrNull()?.takeIf { it > 0 }
+            val episode = snapshot.episode.trim().toIntOrNull()?.takeIf { it > 0 }
+            runCatching {
+                openSubtitlesClient.search(
+                    query = query,
+                    season = season,
+                    episode = episode,
+                    language = snapshot.language,
+                )
+            }.onSuccess { results ->
+                _onlineSubtitleState.update {
+                    it.copy(
+                        isSearching = false,
+                        hasSearched = true,
+                        results = results,
+                        errorMessage = null,
+                    )
+                }
+            }.onFailure { err ->
+                logcat(LogPriority.WARN, err) { "Online subtitle search failed for '$query'" }
+                _onlineSubtitleState.update {
+                    it.copy(
+                        isSearching = false,
+                        hasSearched = true,
+                        errorMessage = context.applicationContext.stringResource(
+                            tachiyomi.i18n.ank.AMR.strings.player_online_subtitles_search_failed,
+                            err.message ?: "Network error",
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun downloadAndApplyOnlineSubtitle(result: OnlineSubtitleResult) {
+        viewModelScope.launchIO {
+            val appContext = context.applicationContext
+            _onlineSubtitleState.update { it.copy(downloadingId = result.id, errorMessage = null) }
+            runCatching {
+                openSubtitlesClient.downloadToCache(appContext, result)
+            }.onSuccess { cachedFile ->
+                val label = "[${result.languageCode.uppercase()}] ${result.releaseName.take(48)}"
+                mpv.command("sub-add", cachedFile.absolutePath, "select", label, result.languageCode)
+                _onlineSubtitleState.update { it.copy(downloadingId = null) }
+                playerUpdate.update {
+                    PlayerUpdates.ShowText(
+                        appContext.stringResource(
+                            tachiyomi.i18n.ank.AMR.strings.player_online_subtitles_loaded,
+                            result.languageLabel,
+                        ),
+                    )
+                }
+            }.onFailure { err ->
+                logcat(LogPriority.WARN, err) { "Online subtitle download failed for ${result.id}" }
+                val message = appContext.stringResource(
+                    tachiyomi.i18n.ank.AMR.strings.player_online_subtitles_download_failed,
+                    err.message ?: "Download error",
+                )
+                _onlineSubtitleState.update { it.copy(downloadingId = null, errorMessage = message) }
+                playerUpdate.update { PlayerUpdates.ShowText(message) }
+            }
+        }
+    }
+
+    private fun extractEpisodeNumberFromName(name: String): Int? {
+        val match = Regex("""(?i)(?:ep(?:isode)?|e|الحلقة|حلقة)\s*#?\s*(\d{1,4})""").find(name)
+            ?: Regex("""\b(\d{1,4})\b""").find(name)
+        return match?.groupValues?.getOrNull(1)?.toIntOrNull()?.takeIf { it > 0 }
+    }
+
+    private fun extractSeasonNumber(text: String): Int? {
+        val match = Regex("""(?i)(?:season|s|الموسم|موسم)\s*(\d{1,2})""").find(text)
+        return match?.groupValues?.getOrNull(1)?.toIntOrNull()?.takeIf { it > 0 }
+    }
+    // ANZ <--
 
     fun selectSub(track: VideoTrack) {
         when (track) {
@@ -2887,13 +3104,8 @@ class PlayerViewModel @JvmOverloads constructor(
 
     // ANZ -->
     fun updateDecoder(decoder: Decoder) {
-        val effectiveDecoder = if (decoder == Decoder.HWPlus && isAnime4KActive(decoderPreferences)) {
-            Decoder.HW
-        } else {
-            decoder
-        }
-        _manualDecoder.update { effectiveDecoder }
-        mpv.setPropertyString("hwdec", effectiveDecoder.value)
+        _manualDecoder.update { decoder }
+        mpv.setPropertyString("hwdec", decoder.value)
     }
 
     fun getDecoder() {

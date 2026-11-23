@@ -1,4 +1,4 @@
-name: Build AniZen 2.6-fix APK
+name: Build AniZen 2.7v APK
 
 on:
   push:
@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   build-apk:
-    name: Build AniZen-2.6-fix APK (arm64-v8a)
+    name: Build AniZen-2.7v APK (arm64-v8a)
     runs-on: ubuntu-latest
 
     steps:
@@ -57,10 +57,10 @@ jobs:
       - name: Assemble arm64-v8a APK (signed)
         run: ./gradlew assembleDebug -PabiList=arm64-v8a --no-daemon
 
-      - name: Prepare and Verify AniZen-2.6-fix.apk
+      - name: Prepare and Verify AniZen-2.7v.apk
         run: |
           set -euo pipefail
-          APK_PATH=$(find app/build/outputs/apk/debug -maxdepth 2 -name 'AniZen-2.6-fix.apk' | head -n 1)
+          APK_PATH=$(find app/build/outputs/apk/debug -maxdepth 2 -name 'AniZen-2.7v.apk' | head -n 1)
           if [ -z "$APK_PATH" ]; then
             APK_PATH=$(find app/build/outputs/apk/debug -maxdepth 2 -name '*arm64-v8a*.apk' | head -n 1)
           fi
@@ -68,14 +68,14 @@ jobs:
             echo "No arm64-v8a debug APK found in app/build/outputs/apk/debug"
             exit 1
           fi
-          echo "Preparing $APK_PATH -> AniZen-2.6-fix.apk"
-          cp "$APK_PATH" AniZen-2.6-fix.apk
-          ls -lh AniZen-2.6-fix.apk
+          echo "Preparing $APK_PATH -> AniZen-2.7v.apk"
+          cp "$APK_PATH" AniZen-2.7v.apk
+          ls -lh AniZen-2.7v.apk
 
           BUILD_TOOLS_DIR=$(ls -d "${ANDROID_SDK_ROOT:-$ANDROID_HOME}"/build-tools/* | sort -V | tail -n 1)
           echo "Using build-tools: $BUILD_TOOLS_DIR"
-          "$BUILD_TOOLS_DIR/apksigner" verify --verbose --print-certs AniZen-2.6-fix.apk
-          BADGING=$("$BUILD_TOOLS_DIR/aapt2" dump badging AniZen-2.6-fix.apk)
+          "$BUILD_TOOLS_DIR/apksigner" verify --verbose --print-certs AniZen-2.7v.apk
+          BADGING=$("$BUILD_TOOLS_DIR/aapt2" dump badging AniZen-2.7v.apk)
           echo "$BADGING" | grep -E "package:|sdkVersion|targetSdkVersion|native-code|application:"
           if echo "$BADGING" | grep -qi "testOnly"; then
             echo "ERROR: APK has android:testOnly set!"
@@ -85,41 +85,44 @@ jobs:
             echo "ERROR: APK is missing arm64-v8a native libraries!"
             exit 1
           fi
-          if ! echo "$BADGING" | grep -q "app.anizen.fix26"; then
-            echo "ERROR: APK package ID is not app.anizen.fix26!"
+          if ! echo "$BADGING" | grep -q "app.anizen.nova"; then
+            echo "ERROR: APK package ID is not app.anizen.nova!"
             exit 1
           fi
 
-      - name: Upload AniZen-2.6-fix Artifact
+      - name: Upload AniZen-2.7v Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AniZen-2.6-fix
-          path: AniZen-2.6-fix.apk
+          name: AniZen-2.7v
+          path: AniZen-2.7v.apk
           if-no-files-found: error
 
-      - name: Publish GitHub Release (2.6-fix)
+      - name: Publish GitHub Release (2.7v)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: 2.6-fix
-          name: AniZen 2.6-fix
+          tag_name: 2.7v
+          name: AniZen 2.7v
           body: |
-            Automated signed `arm64-v8a` side-by-side build of **AniZen 2.6-fix** (`app.anizen.fix26`, launcher label **AniZen 2.6**) — installs cleanly alongside `AniZen 2.5v` (`app.anizen.nova`) without overwriting it.
+            Automated signed `arm64-v8a` build of **AniZen 2.7v** (`app.anizen.nova`) — installs directly as an in-place update over **AniZen 2.5v** without losing any library data, extensions, or settings.
 
-            ### What's Fixed in 2.6-fix
-            - **Anime4K WQHD+ (`3088x1440`) Adreno 740 Black/Blue Screen Fix:**
-              - Enforces `vo=gpu`, `gpu-api=opengl`, `hwdec=mediacodec-copy`, `fbo-format=rgba16hf` (with safe fallback), `gpu-dumb-mode=no`, and clean base scalers (`ewa_lanczossharp` / `mitchell` / `correct-downscaling=yes` / `sigmoid-upscaling=yes`) whenever Anime4K or custom GLSL shaders are active.
-              - Fixes all 14 bundled Anime4K `.glsl` shaders for Adreno OpenGL ES: removes `precision mediump float;` (which collapsed FP16 coordinates above 1024px in Depth-to-Space), replaces dynamic `vec4` indexing `[i.y*2+i.x]` with clamped constant channel selects, fixes `Clamp_Highlights` FBO/alpha/underflow bugs, enforces strict `vec4` `max()` types, and guards `//!WHEN` to prevent `>4K` (`5120x2880`) oversized double-stacked intermediate FBOs.
-              - Optimizes **FAST** (single lightweight `S` CNN pass for Galaxy Tab S9 FE+), **BALANCED** (`M -> S`), and **HIGH** (`L -> M`) across Modes `A`, `B`, `C`, `A+`, `B+`, and `C+` for crisp 480p & 720p upscaling to native `1440p`.
-              - Persisted Anime4K preferences now initialize automatically on player launch.
-            - **All 2.5v Features Preserved:** CloudStream (`.cs3`) extension runtime/UI, FTP/FTPS/SFTP Anime Source, and Arabic tracker normalization remain intact.
+            ### What's New & Fixed in 2.7v
+            - **Anime4K & MPV Renderer Restored to Original 2.5v / Upstream AniZen:**
+              - Reverted all `2.6-fix` Anime4K `.glsl` shader, preset, and MPV renderer/decoder modifications back to exact upstream `salmanbappi/AniZen` (`2.5v`), while keeping custom `PlayerActivity.setHttpOptions` header/cookie passthrough for CloudStream and SFTP streams.
+            - **CloudStream Extensions Across Global Search, Source Merge, Tracker Import & Backup Restore:**
+              - Normalized `CloudStreamAnimeSource.lang` to lowercase ISO-639-1 codes (`ar`, `en`, `all`, etc.) and ensured CloudStream extensions are never hidden by `enabledLanguages` or `ExtensionManager`-only filters in Global Search, Migration / Tracker Import, and Source Merge.
+              - Made `CloudStreamAnimeSource.getSearchAnime` fully stateless with automatic fallback to `quickSearch(query)` when `search(query)` returns empty, and ensured `getAnimeDetails` / `getEpisodeList` resolve cleanly for Merged Anime entries.
+              - Stabilized `CloudStreamSourceIds` with deterministic hashing on canonical `pluginPackageName:mainApi.name` (with automatic legacy `2.5v` ID resolution so existing library entries and backups upgrade seamlessly) and awaited CloudStream startup readiness in `AndroidSourceManager` and `BackupRestorer`.
+            - **Built-in Online Subtitles (OpenSubtitles) & Reliable External Subtitles in Player:**
+              - Hardened local external subtitle loading (`.srt`, `.ass`, `.vtt`, `.ssa`) by caching picked SAF files with preserved extensions and immediately selecting them in MPV (`sub-add ... select`) across CloudStream, SFTP, and standard streams.
+              - Added **Online Subtitles (OpenSubtitles)** directly inside the player's **Subtitles** sheet with pre-filled `TrackerTitleNormalizer`-cleaned anime titles, episode/season filters, and language chips (**Arabic `ar`**, **English `en`**, **All**). Works out of the box with no API key required, plus optional OpenSubtitles.com API key / account credentials in **Settings → Player → Subtitles**.
 
             ### Build Info
-            - Package ID: `app.anizen.fix26` (side-by-side with `app.anizen.nova`)
-            - App Name: `AniZen 2.6`
-            - Version: `2.6-fix`
-            - ABI: `arm64-v8a` (Galaxy S23 Ultra, Galaxy Tab S9 FE+, and all 64-bit ARM devices)
+            - Package ID: `app.anizen.nova` (direct in-place update over `2.5v`)
+            - Version: `2.7v`
+            - Signing: Persistent Nova keystore (v1 + v2 + v3)
+            - ABI: `arm64-v8a`
             - Commit: `${{ github.sha }}`
             - Branch: `${{ github.ref_name }}`
-          files: AniZen-2.6-fix.apk
+          files: AniZen-2.7v.apk
           prerelease: false
           make_latest: true
